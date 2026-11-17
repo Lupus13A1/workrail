@@ -1,0 +1,2 @@
+- Keep the MVP workspace as a frontend-only interactive prototype with local sample state until persistence or external integrations are explicitly requested; this keeps the supplied UX flows demonstrable without implying live services.
+- Keep project template definitions and project-key rules in `src/lib/project-dashboard.ts` so creation and workspace boards share one local source of truth.

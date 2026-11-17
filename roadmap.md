@@ -1,0 +1,4 @@
+- [x] Replace the blank home page with the interactive project-management MVP prototype.
+- [x] Verify the board-to-issue editing flow, responsive layout, and app build.
+- [x] Add a Projects home with searchable project cards and a three-step template-aware creation flow.
+- [ ] Verify key validation, isolated board templates, project creation, and responsive dashboard layout.

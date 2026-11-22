@@ -535,8 +535,8 @@ function ProjectWorkspacePage() {
                 const current = issues.find((item) => item.id === id);
                 if (current) store.updateIssue(activeProject.id, id, { votes: current.votes + 1 });
               }}
-              onMoveIssue={(draggedId, changes, targetId, noticeText) =>
-                store.moveIssue(activeProject.id, draggedId, changes, targetId, noticeText)
+              onMoveIssue={(draggedId, changes, targetId, noticeText, position) =>
+                store.moveIssue(activeProject.id, draggedId, changes, targetId, noticeText, position)
               }
               onCreateSubtask={(parentIssue, title) =>
                 store.addSubtask(activeProject, parentIssue, {
@@ -557,8 +557,8 @@ function ProjectWorkspacePage() {
               issues={issues}
               onOpen={setActiveIssueId}
               onCreate={() => setNewIssueOpen(true)}
-              onMoveIssue={(draggedId, changes, targetId, noticeText) =>
-                store.moveIssue(activeProject.id, draggedId, changes, targetId, noticeText)
+              onMoveIssue={(draggedId, changes, targetId, noticeText, position) =>
+                store.moveIssue(activeProject.id, draggedId, changes, targetId, noticeText, position)
               }
             />
           )}
@@ -566,7 +566,7 @@ function ProjectWorkspacePage() {
             <PipelineView
               issues={issues}
               onOpen={setActiveIssueId}
-              onMoveStage={(draggedId, stage, targetId) => {
+              onMoveStage={(draggedId, stage, targetId, position) => {
                 const nextStatus =
                   stage === "Testing (UAT)"
                     ? "Testing (UAT)"
@@ -575,7 +575,14 @@ function ProjectWorkspacePage() {
                       : stage === "Staging / QA"
                         ? "In Review"
                         : "In Progress";
-                store.moveIssue(activeProject.id, draggedId, { env: stage, status: nextStatus, ai: "Alex Morgan" }, targetId, `Moved to ${stage}`);
+                store.moveIssue(
+                  activeProject.id,
+                  draggedId,
+                  { env: stage, status: nextStatus, ai: "Alex Morgan" },
+                  targetId,
+                  `Moved to ${stage}`,
+                  position,
+                );
               }}
               onPromote={(issue) => {
                 const currentIndex = pipelineColumns.indexOf(issue.env);

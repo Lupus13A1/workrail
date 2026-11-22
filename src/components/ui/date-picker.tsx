@@ -1,5 +1,5 @@
 import * as React from "react";
-import dayjs from "dayjs";
+import { format, getMonth, getYear, isValid, parseISO, setMonth as setDateMonth, setYear as setDateYear } from "date-fns";
 import { Calendar as CalendarIcon, X } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
@@ -23,6 +23,17 @@ const MONTHS = [
   "July", "August", "September", "October", "November", "December"
 ];
 
+function parseDateValue(value?: string | null): Date | undefined {
+  if (!value) return undefined;
+  const parsed = parseISO(value);
+  return isValid(parsed) ? parsed : undefined;
+}
+
+function normalizeDateFnsPattern(pattern: string): string {
+  // Convert common dayjs tokens like D / YYYY to date-fns d / yyyy if passed
+  return pattern.replace(/\bYYYY\b/g, "yyyy").replace(/\bDD\b/g, "dd").replace(/\bD\b/g, "d");
+}
+
 export function DatePicker({
   value,
   onChange,
@@ -31,16 +42,12 @@ export function DatePicker({
   minYear = 1930,
   maxYear = new Date().getFullYear() + 5,
   className,
-  formatDisplay = "D MMMM YYYY",
+  formatDisplay = "d MMMM yyyy",
 }: DatePickerProps) {
   const [open, setOpen] = React.useState(false);
 
   // Parse ISO string (YYYY-MM-DD) avoiding timezone shift
-  const selectedDate = React.useMemo(() => {
-    if (!value) return undefined;
-    const d = dayjs(value);
-    return d.isValid() ? d.toDate() : undefined;
-  }, [value]);
+  const selectedDate = React.useMemo(() => parseDateValue(value), [value]);
 
   const [month, setMonth] = React.useState<Date>(() => selectedDate || new Date());
 
@@ -62,7 +69,7 @@ export function DatePicker({
 
   const handleSelect = (d?: Date) => {
     if (!d) return;
-    const iso = dayjs(d).format("YYYY-MM-DD");
+    const iso = format(d, "yyyy-MM-dd");
     onChange?.(iso);
     setOpen(false);
   };
@@ -76,14 +83,14 @@ export function DatePicker({
     e.stopPropagation();
     const today = new Date();
     setMonth(today);
-    onChange?.(dayjs(today).format("YYYY-MM-DD"));
+    onChange?.(format(today, "yyyy-MM-dd"));
     setOpen(false);
   };
 
   const formattedDisplay = React.useMemo(() => {
     if (!value) return "";
-    const d = dayjs(value);
-    return d.isValid() ? d.format(formatDisplay) : value;
+    const d = parseDateValue(value);
+    return d ? format(d, normalizeDateFnsPattern(formatDisplay)) : value;
   }, [value, formatDisplay]);
 
   return (
@@ -127,15 +134,15 @@ export function DatePicker({
         {/* Month & Year Select Jump Bar */}
         <div className="flex items-center justify-between gap-2 p-3 border-b border-border/60 bg-muted/30">
           <Select
-            value={String(dayjs(month).month())}
+            value={String(getMonth(month))}
             onValueChange={(val) => {
-              setMonth(dayjs(month).month(Number(val)).toDate());
+              setMonth(setDateMonth(month, Number(val)));
             }}
           >
-            <SelectTrigger className="h-8 text-xs font-medium w-[125px] bg-background border-border">
+            <SelectTrigger className="h-8 text-xs font-medium w-31.25 bg-background border-border">
               <SelectValue />
             </SelectTrigger>
-            <SelectContent className="max-h-56 z-[60]">
+            <SelectContent className="max-h-56 z-60">
               {MONTHS.map((m, idx) => (
                 <SelectItem key={m} value={String(idx)} className="text-xs">
                   {m}
@@ -145,15 +152,15 @@ export function DatePicker({
           </Select>
 
           <Select
-            value={String(dayjs(month).year())}
+            value={String(getYear(month))}
             onValueChange={(val) => {
-              setMonth(dayjs(month).year(Number(val)).toDate());
+              setMonth(setDateYear(month, Number(val)));
             }}
           >
-            <SelectTrigger className="h-8 text-xs font-medium w-[95px] bg-background border-border">
+            <SelectTrigger className="h-8 text-xs font-medium w-23.75 bg-background border-border">
               <SelectValue />
             </SelectTrigger>
-            <SelectContent className="max-h-56 z-[60]">
+            <SelectContent className="max-h-56 z-60">
               {years.map((y) => (
                 <SelectItem key={y} value={String(y)} className="text-xs">
                   {y}
@@ -170,7 +177,7 @@ export function DatePicker({
           onSelect={handleSelect}
           month={month}
           onMonthChange={setMonth}
-          initialFocus
+          autoFocus
           className="p-3"
         />
 

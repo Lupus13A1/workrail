@@ -20,7 +20,31 @@ import {
 } from "lucide-react";
 
 import { pipelineColumns, statusClass, type Issue } from "@/lib/workspace-data";
+import type { DropPosition } from "@/lib/workspace-store";
 import { Button } from "@/components/ui/button";
+
+type DropTargetState = {
+  id: string;
+  position: DropPosition;
+  container: string;
+} | null;
+
+function getDropPosition(event: DragEvent<HTMLElement>): DropPosition {
+  const rect = event.currentTarget.getBoundingClientRect();
+  return event.clientY < rect.top + rect.height / 2 ? "before" : "after";
+}
+
+function DropInsertionIndicator({ position }: { position: DropPosition }) {
+  return (
+    <div className={`drop-insertion-indicator is-${position}`} aria-hidden="true">
+      <span className="drop-insertion-dot" />
+      <span className="drop-insertion-line" />
+      <span className="drop-insertion-badge">{position === "before" ? "↑ Drop above" : "↓ Drop below"}</span>
+      <span className="drop-insertion-line" />
+      <span className="drop-insertion-dot" />
+    </div>
+  );
+}
 
 export function SectionHeading({
   eyebrow,
@@ -87,16 +111,31 @@ export function BoardView({
   onOpenNewIssue: () => void;
   onOpenIssue: (id: string) => void;
   onVoteIssue: (id: string) => void;
-  onMoveIssue: (draggedId: string, changes: Partial<Issue>, targetId?: string, noticeText?: string) => void;
+  onMoveIssue: (
+    draggedId: string,
+    changes: Partial<Issue>,
+    targetId?: string,
+    noticeText?: string,
+    position?: DropPosition,
+  ) => void;
   onCreateSubtask?: (parentIssue: Issue, title: string) => Issue | null;
   onToggleSubtaskDone?: (subtask: Issue) => void;
 }) {
   const [dragIssueId, setDragIssueId] = useState<string | null>(null);
   const [dropColumn, setDropColumn] = useState<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<DropTargetState>(null);
   const [collapsedColumns, setCollapsedColumns] = useState<Record<string, boolean>>({});
 
   const toggleCollapse = (column: string) => {
     setCollapsedColumns((current) => ({ ...current, [column]: !current[column] }));
+  };
+
+  const updateDropTarget = (id: string, position: DropPosition, container: string) => {
+    setDropTarget((current) =>
+      current?.id === id && current?.position === position && current?.container === container
+        ? current
+        : { id, position, container },
+    );
   };
 
   return (
@@ -129,18 +168,39 @@ export function BoardView({
                   event.preventDefault();
                   event.dataTransfer.dropEffect = "move";
                   if (dropColumn !== column) setDropColumn(column);
+                  const targetEl = event.target as HTMLElement | null;
+                  if (!targetEl?.closest(".issue-row")) {
+                    const candidates = columnIssues.filter((item) => item.id !== dragIssueId);
+                    const last = candidates.at(-1);
+                    if (last) {
+                      updateDropTarget(last.id, "after", column);
+                    } else if (dropTarget) {
+                      setDropTarget(null);
+                    }
+                  }
                 }}
                 onDragLeave={(event) => {
                   if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
                     setDropColumn((current) => (current === column ? null : current));
+                    setDropTarget((current) => (current?.container === column ? null : current));
                   }
                 }}
                 onDrop={(event) => {
                   event.preventDefault();
                   const droppedId = event.dataTransfer.getData("text/plain") || dragIssueId;
+                  const activeTarget = dropTarget?.container === column ? dropTarget : null;
                   setDropColumn(null);
+                  setDropTarget(null);
                   setDragIssueId(null);
-                  if (droppedId) onMoveIssue(droppedId, { status: column }, undefined, `Moved to ${column}`);
+                  if (droppedId) {
+                    onMoveIssue(
+                      droppedId,
+                      { status: column },
+                      activeTarget?.id,
+                      `Moved to ${column}`,
+                      activeTarget?.position,
+                    );
+                  }
                 }}
               >
                 <div className="section-inline-title">
@@ -158,6 +218,7 @@ export function BoardView({
                     key={issue.id}
                     issue={issue}
                     isDragging={dragIssueId === issue.id}
+                    dropPosition={dropTarget?.container === column && dropTarget.id === issue.id ? dropTarget.position : null}
                     onDragStart={(event) => {
                       event.dataTransfer.effectAllowed = "move";
                       event.dataTransfer.setData("text/plain", issue.id);
@@ -166,18 +227,28 @@ export function BoardView({
                     onDragEnd={() => {
                       setDragIssueId(null);
                       setDropColumn(null);
+                      setDropTarget(null);
                     }}
                     onDragOver={(event) => {
                       event.preventDefault();
+                      event.stopPropagation();
                       event.dataTransfer.dropEffect = "move";
+                      if (dropColumn !== column) setDropColumn(column);
+                      if (dragIssueId === issue.id) {
+                        if (dropTarget) setDropTarget(null);
+                        return;
+                      }
+                      updateDropTarget(issue.id, getDropPosition(event), column);
                     }}
                     onDrop={(event) => {
                       event.preventDefault();
                       event.stopPropagation();
                       const droppedId = event.dataTransfer.getData("text/plain") || dragIssueId;
+                      const position = getDropPosition(event);
                       setDropColumn(null);
+                      setDropTarget(null);
                       setDragIssueId(null);
-                      if (droppedId) onMoveIssue(droppedId, { status: column }, issue.id, `Moved to ${column}`);
+                      if (droppedId) onMoveIssue(droppedId, { status: column }, issue.id, `Moved to ${column}`, position);
                     }}
                     onOpen={() => onOpenIssue(issue.id)}
                   />
@@ -192,6 +263,7 @@ export function BoardView({
           <div className="board-columns" style={{ gridTemplateColumns: `repeat(${boardColumns.length}, minmax(220px, 1fr))` }}>
             {boardColumns.map((column) => {
               const columnIssues = visibleIssues.filter((issue) => issue.status === column);
+              const topLevelColumnIssues = columnIssues.filter((issue) => issue.type !== "Subtask" || !issue.parent);
               const collapsed = Boolean(collapsedColumns[column]);
               return (
                 <div
@@ -201,18 +273,39 @@ export function BoardView({
                     event.preventDefault();
                     event.dataTransfer.dropEffect = "move";
                     if (dropColumn !== column) setDropColumn(column);
+                    const targetEl = event.target as HTMLElement | null;
+                    if (!targetEl?.closest(".issue-card")) {
+                      const candidates = topLevelColumnIssues.filter((item) => item.id !== dragIssueId);
+                      const last = candidates.at(-1);
+                      if (last) {
+                        updateDropTarget(last.id, "after", column);
+                      } else if (dropTarget) {
+                        setDropTarget(null);
+                      }
+                    }
                   }}
                   onDragLeave={(event) => {
                     if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
                       setDropColumn((current) => (current === column ? null : current));
+                      setDropTarget((current) => (current?.container === column ? null : current));
                     }
                   }}
                   onDrop={(event) => {
                     event.preventDefault();
                     const droppedId = event.dataTransfer.getData("text/plain") || dragIssueId;
+                    const activeTarget = dropTarget?.container === column ? dropTarget : null;
                     setDropColumn(null);
+                    setDropTarget(null);
                     setDragIssueId(null);
-                    if (droppedId) onMoveIssue(droppedId, { status: column }, undefined, `Moved to ${column}`);
+                    if (droppedId) {
+                      onMoveIssue(
+                        droppedId,
+                        { status: column },
+                        activeTarget?.id,
+                        `Moved to ${column}`,
+                        activeTarget?.position,
+                      );
+                    }
                   }}
                 >
                   <div className="column-heading">
@@ -233,9 +326,7 @@ export function BoardView({
                   </div>
                   {!collapsed && (
                     <div className="issue-list">
-                      {columnIssues
-                        .filter((issue) => issue.type !== "Subtask" || !issue.parent)
-                        .map((issue) => (
+                      {topLevelColumnIssues.map((issue) => (
                           <IssueCard
                             key={issue.id}
                             issue={issue}
@@ -244,6 +335,9 @@ export function BoardView({
                             selectMode={selectMode}
                             selected={selectedIds.includes(issue.id)}
                             isDragging={dragIssueId === issue.id}
+                            dropPosition={
+                              dropTarget?.container === column && dropTarget.id === issue.id ? dropTarget.position : null
+                            }
                             onToggleSelect={() => onToggleSelect(issue.id)}
                             onDragStart={(event) => {
                               event.dataTransfer.effectAllowed = "move";
@@ -253,18 +347,28 @@ export function BoardView({
                             onDragEnd={() => {
                               setDragIssueId(null);
                               setDropColumn(null);
+                              setDropTarget(null);
                             }}
                             onDragOver={(event) => {
                               event.preventDefault();
+                              event.stopPropagation();
                               event.dataTransfer.dropEffect = "move";
+                              if (dropColumn !== column) setDropColumn(column);
+                              if (dragIssueId === issue.id) {
+                                if (dropTarget) setDropTarget(null);
+                                return;
+                              }
+                              updateDropTarget(issue.id, getDropPosition(event), column);
                             }}
                             onDrop={(event) => {
                               event.preventDefault();
                               event.stopPropagation();
                               const droppedId = event.dataTransfer.getData("text/plain") || dragIssueId;
+                              const position = getDropPosition(event);
                               setDropColumn(null);
+                              setDropTarget(null);
                               setDragIssueId(null);
-                              if (droppedId) onMoveIssue(droppedId, { status: column }, issue.id, `Moved to ${column}`);
+                              if (droppedId) onMoveIssue(droppedId, { status: column }, issue.id, `Moved to ${column}`, position);
                             }}
                             onOpen={() => onOpenIssue(issue.id)}
                             onOpenSubtask={(subId) => onOpenIssue(subId)}
@@ -295,6 +399,7 @@ function IssueCard({
   selectMode = false,
   selected = false,
   isDragging = false,
+  dropPosition = null,
   onToggleSelect,
   onDragStart,
   onDragEnd,
@@ -312,6 +417,7 @@ function IssueCard({
   selectMode?: boolean;
   selected?: boolean;
   isDragging?: boolean;
+  dropPosition?: DropPosition | null;
   onToggleSelect?: () => void;
   onDragStart?: (event: DragEvent<HTMLElement>) => void;
   onDragEnd?: () => void;
@@ -330,13 +436,14 @@ function IssueCard({
 
   return (
     <article
-      className={`issue-card ${compact ? "is-compact" : ""} ${selected ? "is-selected" : ""} ${isDragging ? "is-dragging" : ""}`}
+      className={`issue-card ${compact ? "is-compact" : ""} ${selected ? "is-selected" : ""} ${isDragging ? "is-dragging" : ""} ${dropPosition ? `is-drop-${dropPosition}` : ""}`}
       draggable
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
       onDragOver={onDragOver}
       onDrop={onDrop}
     >
+      {dropPosition && <DropInsertionIndicator position={dropPosition} />}
       <div className="issue-card-top">
         {selectMode && (
           <button
@@ -498,13 +605,28 @@ export function SprintView({
   issues: Issue[];
   onOpen: (id: string) => void;
   onCreate: () => void;
-  onMoveIssue: (draggedId: string, changes: Partial<Issue>, targetId?: string, noticeText?: string) => void;
+  onMoveIssue: (
+    draggedId: string,
+    changes: Partial<Issue>,
+    targetId?: string,
+    noticeText?: string,
+    position?: DropPosition,
+  ) => void;
 }) {
   const sprintIssues = issues.filter((issue) => issue.status !== "Done" && issue.status !== "To Do" && issue.status !== "Backlog");
   const backlog = issues.filter((issue) => issue.status === "To Do" || issue.status === "Backlog");
   const [started, setStarted] = useState(false);
   const [dragId, setDragId] = useState<string | null>(null);
   const [dropSection, setDropSection] = useState<"sprint" | "backlog" | null>(null);
+  const [dropTarget, setDropTarget] = useState<DropTargetState>(null);
+
+  const updateDropTarget = (id: string, position: DropPosition, container: "sprint" | "backlog") => {
+    setDropTarget((current) =>
+      current?.id === id && current?.position === position && current?.container === container
+        ? current
+        : { id, position, container },
+    );
+  };
 
   return (
     <div className="subpage">
@@ -524,18 +646,39 @@ export function SprintView({
           event.preventDefault();
           event.dataTransfer.dropEffect = "move";
           if (dropSection !== "sprint") setDropSection("sprint");
+          const targetEl = event.target as HTMLElement | null;
+          if (!targetEl?.closest(".issue-row")) {
+            const candidates = sprintIssues.filter((item) => item.id !== dragId);
+            const last = candidates.at(-1);
+            if (last) {
+              updateDropTarget(last.id, "after", "sprint");
+            } else if (dropTarget) {
+              setDropTarget(null);
+            }
+          }
         }}
         onDragLeave={(event) => {
           if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
             setDropSection((current) => (current === "sprint" ? null : current));
+            setDropTarget((current) => (current?.container === "sprint" ? null : current));
           }
         }}
         onDrop={(event) => {
           event.preventDefault();
           const droppedId = event.dataTransfer.getData("text/plain") || dragId;
+          const activeTarget = dropTarget?.container === "sprint" ? dropTarget : null;
           setDropSection(null);
+          setDropTarget(null);
           setDragId(null);
-          if (droppedId) onMoveIssue(droppedId, { status: "In Progress" }, undefined, "Moved to Sprint 24");
+          if (droppedId) {
+            onMoveIssue(
+              droppedId,
+              { status: "In Progress" },
+              activeTarget?.id,
+              "Moved to Sprint 24",
+              activeTarget?.position,
+            );
+          }
         }}
       >
         <div className="section-inline-title">
@@ -556,6 +699,7 @@ export function SprintView({
             key={issue.id}
             issue={issue}
             isDragging={dragId === issue.id}
+            dropPosition={dropTarget?.container === "sprint" && dropTarget.id === issue.id ? dropTarget.position : null}
             onDragStart={(event) => {
               event.dataTransfer.effectAllowed = "move";
               event.dataTransfer.setData("text/plain", issue.id);
@@ -564,18 +708,28 @@ export function SprintView({
             onDragEnd={() => {
               setDragId(null);
               setDropSection(null);
+              setDropTarget(null);
             }}
             onDragOver={(event) => {
               event.preventDefault();
+              event.stopPropagation();
               event.dataTransfer.dropEffect = "move";
+              if (dropSection !== "sprint") setDropSection("sprint");
+              if (dragId === issue.id) {
+                if (dropTarget) setDropTarget(null);
+                return;
+              }
+              updateDropTarget(issue.id, getDropPosition(event), "sprint");
             }}
             onDrop={(event) => {
               event.preventDefault();
               event.stopPropagation();
               const droppedId = event.dataTransfer.getData("text/plain") || dragId;
+              const position = getDropPosition(event);
               setDropSection(null);
+              setDropTarget(null);
               setDragId(null);
-              if (droppedId) onMoveIssue(droppedId, { status: issue.status }, issue.id, "Updated sprint order");
+              if (droppedId) onMoveIssue(droppedId, { status: issue.status }, issue.id, "Updated sprint order", position);
             }}
             onOpen={() => onOpen(issue.id)}
           />
@@ -589,18 +743,39 @@ export function SprintView({
           event.preventDefault();
           event.dataTransfer.dropEffect = "move";
           if (dropSection !== "backlog") setDropSection("backlog");
+          const targetEl = event.target as HTMLElement | null;
+          if (!targetEl?.closest(".issue-row")) {
+            const candidates = backlog.filter((item) => item.id !== dragId);
+            const last = candidates.at(-1);
+            if (last) {
+              updateDropTarget(last.id, "after", "backlog");
+            } else if (dropTarget) {
+              setDropTarget(null);
+            }
+          }
         }}
         onDragLeave={(event) => {
           if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
             setDropSection((current) => (current === "backlog" ? null : current));
+            setDropTarget((current) => (current?.container === "backlog" ? null : current));
           }
         }}
         onDrop={(event) => {
           event.preventDefault();
           const droppedId = event.dataTransfer.getData("text/plain") || dragId;
+          const activeTarget = dropTarget?.container === "backlog" ? dropTarget : null;
           setDropSection(null);
+          setDropTarget(null);
           setDragId(null);
-          if (droppedId) onMoveIssue(droppedId, { status: "To Do" }, undefined, "Moved to backlog");
+          if (droppedId) {
+            onMoveIssue(
+              droppedId,
+              { status: "To Do" },
+              activeTarget?.id,
+              "Moved to backlog",
+              activeTarget?.position,
+            );
+          }
         }}
       >
         <div className="section-inline-title">
@@ -618,6 +793,7 @@ export function SprintView({
             key={issue.id}
             issue={issue}
             isDragging={dragId === issue.id}
+            dropPosition={dropTarget?.container === "backlog" && dropTarget.id === issue.id ? dropTarget.position : null}
             onDragStart={(event) => {
               event.dataTransfer.effectAllowed = "move";
               event.dataTransfer.setData("text/plain", issue.id);
@@ -626,18 +802,28 @@ export function SprintView({
             onDragEnd={() => {
               setDragId(null);
               setDropSection(null);
+              setDropTarget(null);
             }}
             onDragOver={(event) => {
               event.preventDefault();
+              event.stopPropagation();
               event.dataTransfer.dropEffect = "move";
+              if (dropSection !== "backlog") setDropSection("backlog");
+              if (dragId === issue.id) {
+                if (dropTarget) setDropTarget(null);
+                return;
+              }
+              updateDropTarget(issue.id, getDropPosition(event), "backlog");
             }}
             onDrop={(event) => {
               event.preventDefault();
               event.stopPropagation();
               const droppedId = event.dataTransfer.getData("text/plain") || dragId;
+              const position = getDropPosition(event);
               setDropSection(null);
+              setDropTarget(null);
               setDragId(null);
-              if (droppedId) onMoveIssue(droppedId, { status: "To Do" }, issue.id, "Updated backlog order");
+              if (droppedId) onMoveIssue(droppedId, { status: "To Do" }, issue.id, "Updated backlog order", position);
             }}
             onOpen={() => onOpen(issue.id)}
           />
@@ -651,6 +837,7 @@ export function SprintView({
 function IssueRow({
   issue,
   isDragging = false,
+  dropPosition = null,
   onDragStart,
   onDragEnd,
   onDragOver,
@@ -659,6 +846,7 @@ function IssueRow({
 }: {
   issue: Issue;
   isDragging?: boolean;
+  dropPosition?: DropPosition | null;
   onDragStart?: (event: DragEvent<HTMLButtonElement>) => void;
   onDragEnd?: () => void;
   onDragOver?: (event: DragEvent<HTMLButtonElement>) => void;
@@ -667,7 +855,7 @@ function IssueRow({
 }) {
   return (
     <button
-      className={`issue-row ${isDragging ? "is-dragging" : ""}`}
+      className={`issue-row ${isDragging ? "is-dragging" : ""} ${dropPosition ? `is-drop-${dropPosition}` : ""}`}
       draggable
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
@@ -675,6 +863,7 @@ function IssueRow({
       onDrop={onDrop}
       onClick={onOpen}
     >
+      {dropPosition && <DropInsertionIndicator position={dropPosition} />}
       <Grip size={15} className="row-grip" />
       <span className="issue-key">{issue.key}</span>
       <span className={`type-icon type-${issue.type.toLowerCase()}`}>{issue.type === "Bug" ? "◆" : issue.type === "Feature" ? "✦" : "≡"}</span>
@@ -698,10 +887,19 @@ export function PipelineView({
   issues: Issue[];
   onOpen: (id: string) => void;
   onPromote: (issue: Issue) => void;
-  onMoveStage: (draggedId: string, stage: string, targetId?: string) => void;
+  onMoveStage: (draggedId: string, stage: string, targetId?: string, position?: DropPosition) => void;
 }) {
   const [dragId, setDragId] = useState<string | null>(null);
   const [dropStage, setDropStage] = useState<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<DropTargetState>(null);
+
+  const updateDropTarget = (id: string, position: DropPosition, container: string) => {
+    setDropTarget((current) =>
+      current?.id === id && current?.position === position && current?.container === container
+        ? current
+        : { id, position, container },
+    );
+  };
 
   return (
     <div className="subpage">
@@ -743,18 +941,31 @@ export function PipelineView({
                 event.preventDefault();
                 event.dataTransfer.dropEffect = "move";
                 if (dropStage !== stage) setDropStage(stage);
+                const targetEl = event.target as HTMLElement | null;
+                if (!targetEl?.closest(".pipeline-card")) {
+                  const candidates = items.filter((item) => item.id !== dragId);
+                  const last = candidates.at(-1);
+                  if (last) {
+                    updateDropTarget(last.id, "after", stage);
+                  } else if (dropTarget) {
+                    setDropTarget(null);
+                  }
+                }
               }}
               onDragLeave={(event) => {
                 if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
                   setDropStage((current) => (current === stage ? null : current));
+                  setDropTarget((current) => (current?.container === stage ? null : current));
                 }
               }}
               onDrop={(event) => {
                 event.preventDefault();
                 const droppedId = event.dataTransfer.getData("text/plain") || dragId;
+                const activeTarget = dropTarget?.container === stage ? dropTarget : null;
                 setDropStage(null);
+                setDropTarget(null);
                 setDragId(null);
-                if (droppedId) onMoveStage(droppedId, stage);
+                if (droppedId) onMoveStage(droppedId, stage, activeTarget?.id, activeTarget?.position);
               }}
             >
               <div className="pipeline-stage-heading">
@@ -762,33 +973,47 @@ export function PipelineView({
                 <h3>{stage}</h3>
                 <span className="column-count">{items.length}</span>
               </div>
-              {items.map((issue) => (
-                <article
-                  className={`pipeline-card ${dragId === issue.id ? "is-dragging" : ""}`}
-                  key={issue.id}
-                  draggable
-                  onDragStart={(event) => {
-                    event.dataTransfer.effectAllowed = "move";
-                    event.dataTransfer.setData("text/plain", issue.id);
-                    setDragId(issue.id);
-                  }}
-                  onDragEnd={() => {
-                    setDragId(null);
-                    setDropStage(null);
-                  }}
-                  onDragOver={(event) => {
-                    event.preventDefault();
-                    event.dataTransfer.dropEffect = "move";
-                  }}
-                  onDrop={(event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    const droppedId = event.dataTransfer.getData("text/plain") || dragId;
-                    setDropStage(null);
-                    setDragId(null);
-                    if (droppedId) onMoveStage(droppedId, stage, issue.id);
-                  }}
-                >
+              {items.map((issue) => {
+                const cardDropPosition =
+                  dropTarget?.container === stage && dropTarget.id === issue.id ? dropTarget.position : null;
+                return (
+                  <article
+                    className={`pipeline-card ${dragId === issue.id ? "is-dragging" : ""} ${cardDropPosition ? `is-drop-${cardDropPosition}` : ""}`}
+                    key={issue.id}
+                    draggable
+                    onDragStart={(event) => {
+                      event.dataTransfer.effectAllowed = "move";
+                      event.dataTransfer.setData("text/plain", issue.id);
+                      setDragId(issue.id);
+                    }}
+                    onDragEnd={() => {
+                      setDragId(null);
+                      setDropStage(null);
+                      setDropTarget(null);
+                    }}
+                    onDragOver={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      event.dataTransfer.dropEffect = "move";
+                      if (dropStage !== stage) setDropStage(stage);
+                      if (dragId === issue.id) {
+                        if (dropTarget) setDropTarget(null);
+                        return;
+                      }
+                      updateDropTarget(issue.id, getDropPosition(event), stage);
+                    }}
+                    onDrop={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      const droppedId = event.dataTransfer.getData("text/plain") || dragId;
+                      const position = getDropPosition(event);
+                      setDropStage(null);
+                      setDropTarget(null);
+                      setDragId(null);
+                      if (droppedId) onMoveStage(droppedId, stage, issue.id, position);
+                    }}
+                  >
+                    {cardDropPosition && <DropInsertionIndicator position={cardDropPosition} />}
                   <button className="issue-key" onClick={() => onOpen(issue.id)}>
                     {issue.key}
                   </button>
@@ -808,8 +1033,9 @@ export function PipelineView({
                       </Button>
                     )}
                   </div>
-                </article>
-              ))}
+                  </article>
+                );
+              })}
               {items.length === 0 && <div className="pipeline-empty">No releases here</div>}
             </div>
           );

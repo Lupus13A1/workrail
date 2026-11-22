@@ -22,6 +22,8 @@ export function getProjectSlug(project: Pick<Project, "id" | "name">): string {
   );
 }
 
+export type DropPosition = "before" | "after";
+
 type WorkspaceContextValue = {
   projects: Project[];
   projectIssues: Record<string, Issue[]>;
@@ -37,7 +39,14 @@ type WorkspaceContextValue = {
   ensureProjectIssues: (project: Project) => void;
   markRecent: (projectId: string) => void;
   updateIssue: (projectId: string, id: string, changes: Partial<Issue>) => void;
-  moveIssue: (projectId: string, draggedId: string, changes: Partial<Issue>, targetId?: string, noticeText?: string) => void;
+  moveIssue: (
+    projectId: string,
+    draggedId: string,
+    changes: Partial<Issue>,
+    targetId?: string,
+    noticeText?: string,
+    position?: DropPosition,
+  ) => void;
   deleteIssue: (projectId: string, id: string, key: string) => void;
   addIssue: (project: Project, form: FormData) => Issue | null;
   addSubtask: (
@@ -90,7 +99,14 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     }));
   };
 
-  const moveIssue = (projectId: string, draggedId: string, changes: Partial<Issue>, targetId?: string, noticeText?: string) => {
+  const moveIssue = (
+    projectId: string,
+    draggedId: string,
+    changes: Partial<Issue>,
+    targetId?: string,
+    noticeText?: string,
+    position: DropPosition = "before",
+  ) => {
     const currentList = projectIssues[projectId] ?? [];
     const previous = currentList.find((item) => item.id === draggedId);
     if (!previous) return;
@@ -101,11 +117,18 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       if (!dragged) return current;
       const updated: Issue = { ...dragged, ...changes };
       const without = list.filter((item) => item.id !== draggedId);
-      if (!targetId || targetId === draggedId) return { ...current, [projectId]: [...without, updated] };
+      if (!targetId) return { ...current, [projectId]: [...without, updated] };
+      if (targetId === draggedId) {
+        const originalIndex = list.findIndex((item) => item.id === draggedId);
+        const next = [...without];
+        next.splice(Math.max(0, originalIndex), 0, updated);
+        return { ...current, [projectId]: next };
+      }
       const targetIndex = without.findIndex((item) => item.id === targetId);
       if (targetIndex === -1) return { ...current, [projectId]: [...without, updated] };
+      const insertIndex = position === "after" ? targetIndex + 1 : targetIndex;
       const next = [...without];
-      next.splice(targetIndex, 0, updated);
+      next.splice(insertIndex, 0, updated);
       return { ...current, [projectId]: next };
     });
 

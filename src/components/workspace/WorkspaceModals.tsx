@@ -47,6 +47,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { RichTextEditor, markdownToHtml } from "@/components/workspace/RichTextEditor";
 
 export function GlobalSearchModal({
   projects,
@@ -207,10 +208,6 @@ export function CreateIssueModal({
   const [priority, setPriority] = useState<IssuePriority>("Medium");
   const [description, setDescription] = useState("");
 
-  const insertFormat = (snippet: string) => {
-    setDescription((prev) => (prev ? `${prev}\n${snippet}` : snippet));
-  };
-
   return (
     <div
       className="modal-scrim"
@@ -324,35 +321,14 @@ export function CreateIssueModal({
 
         <div className="ci-section">
           <span className="ci-label">Description</span>
-          <div className="rich-editor">
-            <div className="rich-toolbar">
-              <Button type="button" variant="ghost" size="sm" className="ci-text-btn" onClick={() => insertFormat("## Section")}>
-                Text <ChevronDown size={12} />
-              </Button>
-              <span className="drawer-divider" />
-              <Button type="button" variant="ghost" size="icon" title="Bold" onClick={() => insertFormat("**bold text**")}>
-                <strong>B</strong>
-              </Button>
-              <Button type="button" variant="ghost" size="icon" title="Italic" onClick={() => insertFormat("_italic text_")}>
-                <em>I</em>
-              </Button>
-              <Button type="button" variant="ghost" size="icon" title="Code" onClick={() => insertFormat("`code`")}>
-                <Code2 size={14} />
-              </Button>
-              <Button type="button" variant="ghost" size="icon" title="Checklist" onClick={() => insertFormat("- [ ] Checklist item")}>
-                <CheckCheck size={14} />
-              </Button>
-            </div>
-            <Textarea
-              name="description"
-              className="rich-description"
-              placeholder="Describe the work... paste or drop images and files"
-              value={description}
-              onChange={(event) => setDescription(event.target.value)}
-              rows={4}
-            />
-          </div>
-          <p className="ci-hint">type @ to mention someone · paste or drop images and files · markdown shortcuts work: ## heading, - [ ] checklist, **bold**</p>
+          <RichTextEditor
+            name="description"
+            value={description}
+            onChange={setDescription}
+            placeholder="Describe the work... paste or drop images and files"
+            minHeight={148}
+            showFooterHint
+          />
         </div>
 
         <div className="modal-actions">
@@ -704,6 +680,10 @@ export function IssueDrawer({
   onChange,
   onDelete,
   onCopy,
+  onOpenIssue,
+  onCreateSubtask,
+  onUpdateSubtask,
+  onDeleteSubtask,
 }: {
   issue: Issue;
   projectName: string;
@@ -714,6 +694,10 @@ export function IssueDrawer({
   onChange: (changes: Partial<Issue>) => void;
   onDelete: () => void;
   onCopy: (text: string, message?: string) => void;
+  onOpenIssue?: (issueId: string) => void;
+  onCreateSubtask?: (data: { title: string; assignee?: string; priority?: IssuePriority; status?: string }) => Issue | null;
+  onUpdateSubtask?: (subtaskId: string, changes: Partial<Issue>) => void;
+  onDeleteSubtask?: (subtaskId: string, key: string) => void;
 }) {
   const [viewMode, setViewMode] = useState<ViewMode>("rendered");
   const [expanded, setExpanded] = useState(false);
@@ -721,8 +705,7 @@ export function IssueDrawer({
   const [priorityOpen, setPriorityOpen] = useState(false);
   const [moreFieldsOpen, setMoreFieldsOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(true);
-  const [linkMenuOpen, setLinkMenuOpen] = useState(false);
-  const [linkedKeys, setLinkedKeys] = useState<string[]>([]);
+  const [linkedKeys] = useState<string[]>([]);
   const [pointsDraft, setPointsDraft] = useState(issue.points ?? "");
   const [editingDescription, setEditingDescription] = useState(false);
   const [descriptionDraft, setDescriptionDraft] = useState(issue.description);
@@ -735,6 +718,18 @@ export function IssueDrawer({
   const [history, setHistory] = useState<{ text: string; time: string }[]>([
     { text: `created ${issue.key}`, time: "17 Nov, 11:41" },
   ]);
+  const [addingSubtask, setAddingSubtask] = useState(false);
+  const [newSubtaskTitle, setNewSubtaskTitle] = useState("");
+  const [newSubtaskAssignee, setNewSubtaskAssignee] = useState("");
+  const [newSubtaskPriority, setNewSubtaskPriority] = useState<IssuePriority>("Medium");
+
+  useEffect(() => {
+    setPointsDraft(issue.points ?? "");
+    setDescriptionDraft(issue.description);
+    setEditingDescription(false);
+    setAddingSubtask(false);
+    setNewSubtaskTitle("");
+  }, [issue.id, issue.points, issue.description]);
 
   const saveDescription = () => {
     recordChange("updated description", { description: descriptionDraft });
@@ -756,7 +751,24 @@ export function IssueDrawer({
   };
 
   const subTasks = allIssues.filter((item) => item.parent === issue.key);
-  const linkCandidates = allIssues.filter((item) => item.id !== issue.id && !linkedKeys.includes(item.key));
+  const parentIssue = issue.parent ? allIssues.find((item) => item.key === issue.parent) : undefined;
+  const doneSubtasksCount = subTasks.filter((sub) => sub.status === "Done").length;
+  const subtaskProgressPct = subTasks.length > 0 ? Math.round((doneSubtasksCount / subTasks.length) * 100) : 0;
+
+  const submitNewSubtask = () => {
+    const clean = newSubtaskTitle.trim();
+    if (!clean || !onCreateSubtask) return;
+    const created = onCreateSubtask({
+      title: clean,
+      assignee: newSubtaskAssignee,
+      priority: newSubtaskPriority,
+      status: projectColumns[0] ?? "To Do",
+    });
+    if (created) {
+      setHistory((current) => [{ text: `added subtask ${created.key}: "${created.title}"`, time: "Just now" }, ...current]);
+      setNewSubtaskTitle("");
+    }
+  };
 
   const frontmatterText = [
     "---",
@@ -780,42 +792,15 @@ export function IssueDrawer({
   ].join("\n");
 
   const renderDescriptionLines = (text: string) => {
-    const blocks = text.split("\n\n").filter(Boolean);
-    if (blocks.length === 0) {
+    if (!text || !text.trim()) {
       return <p className="drawer-empty-desc">No description yet. Click the edit button to add details.</p>;
     }
-    return blocks.map((block, index) => {
-      if (block.startsWith("## ")) {
-        return (
-          <h4 key={index} className="md-h2">
-            {block.slice(3)}
-          </h4>
-        );
-      }
-      if (block.startsWith("```")) {
-        const code = block.replace(/^```\w*\n?/, "").replace(/\n?```$/, "");
-        return (
-          <pre key={index} className="md-code-block">
-            <code>{code}</code>
-          </pre>
-        );
-      }
-      const lines = block.split("\n");
-      if (lines.every((line) => line.startsWith("- "))) {
-        return (
-          <ul key={index} className="md-list">
-            {lines.map((line, lineIndex) => (
-              <li key={lineIndex}>{line.slice(2)}</li>
-            ))}
-          </ul>
-        );
-      }
-      return (
-        <p key={index} className="md-paragraph">
-          {block}
-        </p>
-      );
-    });
+    return (
+      <div
+        className="rte-rendered-content"
+        dangerouslySetInnerHTML={{ __html: markdownToHtml(text) }}
+      />
+    );
   };
 
   return (
@@ -833,6 +818,19 @@ export function IssueDrawer({
             </span>
             <div className="drawer-breadcrumb">
               <span>{projectName}</span>
+              {parentIssue && (
+                <>
+                  <span>/</span>
+                  <button
+                    type="button"
+                    className="cu-parent-crumb"
+                    title={`Back to parent: ${parentIssue.title}`}
+                    onClick={() => onOpenIssue?.(parentIssue.id)}
+                  >
+                    {parentIssue.key}: {parentIssue.title}
+                  </button>
+                </>
+              )}
               <span>/</span>
               <strong className="drawer-key">{issue.key}</strong>
             </div>
@@ -892,76 +890,16 @@ export function IssueDrawer({
               <span className="status-pill">
                 <i className="status-dot dot-blue" /> {issue.status}
               </span>
+              {parentIssue && (
+                <button
+                  type="button"
+                  className="cu-parent-pill"
+                  onClick={() => onOpenIssue?.(parentIssue.id)}
+                >
+                  ↳ Subtask of <strong>{parentIssue.key}</strong> ({parentIssue.title})
+                </button>
+              )}
             </div>
-
-            <section className="drawer-sub-section">
-              <h3>Sub-tasks</h3>
-              {subTasks.length === 0 ? (
-                <p className="drawer-muted-line">No sub-tasks — issues that name this one as their parent show here</p>
-              ) : (
-                <div className="drawer-linked-list">
-                  {subTasks.map((sub) => (
-                    <div key={sub.id} className="drawer-linked-row">
-                      <code>{sub.key}</code>
-                      <span>{sub.title}</span>
-                      <small>{sub.status}</small>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </section>
-
-            <section className="drawer-sub-section">
-              <div className="drawer-sub-head">
-                <div>
-                  <h3>Linked items</h3>
-                  <p className="drawer-muted-line">Grouped by project · live status of each target · targets you cannot open show only the key</p>
-                </div>
-                <div className="link-to-wrap">
-                  <Button size="sm" className="create-button" onClick={() => setLinkMenuOpen(!linkMenuOpen)}>
-                    <Link2 size={14} /> Link to...
-                  </Button>
-                  {linkMenuOpen && (
-                    <div className="link-to-menu">
-                      {linkCandidates.length === 0 ? (
-                        <span className="drawer-muted-line">No more issues to link</span>
-                      ) : (
-                        linkCandidates.map((candidate) => (
-                          <button
-                            key={candidate.id}
-                            type="button"
-                            onClick={() => {
-                              setLinkedKeys((current) => [...current, candidate.key]);
-                              setLinkMenuOpen(false);
-                              setHistory((current) => [{ text: `linked ${candidate.key}`, time: "Just now" }, ...current]);
-                            }}
-                          >
-                            <code>{candidate.key}</code>
-                            <span>{candidate.title}</span>
-                          </button>
-                        ))
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-              {linkedKeys.length === 0 ? (
-                <p className="drawer-muted-line">Nothing linked yet — progress stays empty</p>
-              ) : (
-                <div className="drawer-linked-list">
-                  {linkedKeys.map((key) => {
-                    const target = allIssues.find((item) => item.key === key);
-                    return (
-                      <div key={key} className="drawer-linked-row">
-                        <code>{key}</code>
-                        <span>{target?.title ?? key}</span>
-                        <small>{target?.status ?? "Linked"}</small>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </section>
 
             <section className="drawer-description-section">
               {viewMode === "rendered" && (
@@ -987,61 +925,20 @@ export function IssueDrawer({
                   </div>
                   {editingDescription ? (
                     <div className="inline-desc-editor">
-                      <div className="rich-editor">
-                        <div className="rich-toolbar">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            className="ci-text-btn"
-                            onClick={() => setDescriptionDraft((prev) => `${prev}\n\n## Section`)}
-                          >
-                            Text <ChevronDown size={12} />
-                          </Button>
-                          <span className="drawer-divider" />
-                          <Button type="button" variant="ghost" size="icon" title="Bold" onClick={() => setDescriptionDraft((prev) => `${prev}**bold**`)}>
-                            <strong>B</strong>
-                          </Button>
-                          <Button type="button" variant="ghost" size="icon" title="Italic" onClick={() => setDescriptionDraft((prev) => `${prev}_italic_`)}>
-                            <em>I</em>
-                          </Button>
-                          <Button type="button" variant="ghost" size="icon" title="Strikethrough" onClick={() => setDescriptionDraft((prev) => `${prev}~~text~~`)}>
-                            <Strikethrough size={14} />
-                          </Button>
-                          <Button type="button" variant="ghost" size="icon" title="Inline code" onClick={() => setDescriptionDraft((prev) => `${prev}\`code\``)}>
-                            <Code2 size={14} />
-                          </Button>
-                          <span className="drawer-divider" />
-                          <Button type="button" variant="ghost" size="icon" title="Bullet list" onClick={() => setDescriptionDraft((prev) => `${prev}\n- List item`)}>
-                            <List size={14} />
-                          </Button>
-                          <Button type="button" variant="ghost" size="icon" title="Numbered list" onClick={() => setDescriptionDraft((prev) => `${prev}\n1. Step`)}>
-                            <ListOrdered size={14} />
-                          </Button>
-                          <Button type="button" variant="ghost" size="icon" title="Checklist" onClick={() => setDescriptionDraft((prev) => `${prev}\n- [ ] Task`)}>
-                            <CheckCheck size={14} />
-                          </Button>
-                          <Button type="button" variant="ghost" size="icon" title="Quote" onClick={() => setDescriptionDraft((prev) => `${prev}\n> Quote`)}>
-                            <Quote size={14} />
-                          </Button>
-                        </div>
-                        <Textarea
-                          className="rich-description inline-desc-textarea"
-                          aria-label="Edit issue description"
-                          value={descriptionDraft}
-                          onChange={(event) => setDescriptionDraft(event.target.value)}
-                          onKeyDown={(event) => {
-                            if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") {
-                              event.preventDefault();
-                              saveDescription();
-                            }
-                          }}
-                          rows={8}
-                        />
-                        <div className="editor-shortcut-foot">
-                          type @ to mention someone · paste or drop images and files · markdown shortcuts work: ## heading, - [ ] checklist, **bold**
-                        </div>
-                      </div>
+                      <RichTextEditor
+                        ariaLabel="Edit issue description"
+                        value={descriptionDraft}
+                        onChange={setDescriptionDraft}
+                        placeholder="Describe the work... paste or drop images and files"
+                        minHeight={200}
+                        showFooterHint
+                        onKeyDown={(event) => {
+                          if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") {
+                            event.preventDefault();
+                            saveDescription();
+                          }
+                        }}
+                      />
                       <div className="inline-desc-actions">
                         <Button type="button" size="sm" className="create-button" onClick={saveDescription}>
                           <Check size={14} /> Save description
@@ -1083,6 +980,243 @@ export function IssueDrawer({
                   </p>
                   <pre className="raw-frontmatter-block">{frontmatterText}</pre>
                 </>
+              )}
+            </section>
+
+            {/* ClickUp-style Subtasks Section */}
+            <section className="cu-subtasks-section">
+              <div className="cu-subtasks-header">
+                <div className="cu-subtasks-title-group">
+                  <h3>Subtasks</h3>
+                  <span className="soft-pill">
+                    {doneSubtasksCount}/{subTasks.length}
+                  </span>
+                  {subTasks.length > 0 && (
+                    <div className="cu-subtask-progress" title={`${subtaskProgressPct}% completed`}>
+                      <div className="cu-subtask-progress-track">
+                        <i style={{ width: `${subtaskProgressPct}%` }} />
+                      </div>
+                      <small>{subtaskProgressPct}%</small>
+                    </div>
+                  )}
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="pill-control"
+                  onClick={() => setAddingSubtask(true)}
+                >
+                  <Plus size={14} /> Add subtask
+                </Button>
+              </div>
+
+              {subTasks.length > 0 && (
+                <div className="cu-subtasks-table">
+                  <div className="cu-subtasks-thead">
+                    <span>Name</span>
+                    <span>Assignee</span>
+                    <span>Priority</span>
+                    <span>Status</span>
+                    <span />
+                  </div>
+                  {subTasks.map((sub) => {
+                    const isDone = sub.status === "Done";
+                    return (
+                      <div key={sub.id} className={`cu-subtask-row ${isDone ? "is-done" : ""}`}>
+                        <div className="cu-subtask-main">
+                          <button
+                            type="button"
+                            className={`cu-subtask-check ${isDone ? "is-checked" : ""}`}
+                            title={isDone ? "Mark as To Do" : "Mark as Done"}
+                            onClick={() =>
+                              onUpdateSubtask?.(sub.id, {
+                                status: isDone ? projectColumns[0] ?? "To Do" : "Done",
+                              })
+                            }
+                          >
+                            {isDone && <Check size={11} />}
+                          </button>
+                          <button
+                            type="button"
+                            className="cu-subtask-open-btn"
+                            onClick={() => onOpenIssue?.(sub.id)}
+                            title="Click to open subtask details"
+                          >
+                            <code className="cu-subtask-key">{sub.key}</code>
+                            <span className="cu-subtask-name">{sub.title}</span>
+                            <ArrowRight size={13} className="cu-subtask-open-arrow" />
+                          </button>
+                        </div>
+
+                        <div className="cu-subtask-cell">
+                          <select
+                            className="cu-subtask-select"
+                            aria-label={`Assignee for ${sub.key}`}
+                            value={sub.assignee === "Unassigned" ? "" : sub.assignee}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              if (!val) {
+                                onUpdateSubtask?.(sub.id, {
+                                  assignee: "Unassigned",
+                                  initials: "—",
+                                  color: "avatar-extra",
+                                });
+                              } else {
+                                const info = peopleAvatars[val] ?? ["AM", "avatar-mint"];
+                                onUpdateSubtask?.(sub.id, {
+                                  assignee: val,
+                                  initials: info[0],
+                                  color: info[1],
+                                });
+                              }
+                            }}
+                          >
+                            <option value="">Unassigned</option>
+                            {people.map((p) => (
+                              <option key={p} value={p}>
+                                {p}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="cu-subtask-cell">
+                          <select
+                            className="cu-subtask-select"
+                            aria-label={`Priority for ${sub.key}`}
+                            value={sub.priority}
+                            onChange={(e) =>
+                              onUpdateSubtask?.(sub.id, {
+                                priority: e.target.value as IssuePriority,
+                              })
+                            }
+                          >
+                            {(["Highest", "High", "Medium", "Low", "Lowest"] as IssuePriority[]).map((p) => (
+                              <option key={p} value={p}>
+                                {p}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="cu-subtask-cell">
+                          <select
+                            className="cu-subtask-select cu-subtask-status-select"
+                            aria-label={`Status for ${sub.key}`}
+                            value={sub.status}
+                            onChange={(e) =>
+                              onUpdateSubtask?.(sub.id, {
+                                status: e.target.value,
+                              })
+                            }
+                          >
+                            {projectColumns.map((col) => (
+                              <option key={col} value={col}>
+                                {col}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="cu-subtask-actions">
+                          <button
+                            type="button"
+                            className="cu-subtask-icon-btn"
+                            title="Open subtask"
+                            onClick={() => onOpenIssue?.(sub.id)}
+                          >
+                            <ArrowRight size={13} />
+                          </button>
+                          <button
+                            type="button"
+                            className="cu-subtask-icon-btn cu-subtask-del-btn"
+                            title="Delete subtask"
+                            onClick={() => onDeleteSubtask?.(sub.id, sub.key)}
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {addingSubtask ? (
+                <div className="cu-subtask-creator">
+                  <span className="cu-subtask-creator-icon">↳</span>
+                  <input
+                    type="text"
+                    className="cp-input cu-subtask-input"
+                    autoFocus
+                    placeholder="Subtask name... (press Enter to save, Esc to cancel)"
+                    value={newSubtaskTitle}
+                    onChange={(e) => setNewSubtaskTitle(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        submitNewSubtask();
+                      } else if (e.key === "Escape") {
+                        setAddingSubtask(false);
+                        setNewSubtaskTitle("");
+                      }
+                    }}
+                  />
+                  <select
+                    className="cu-subtask-select"
+                    value={newSubtaskAssignee}
+                    onChange={(e) => setNewSubtaskAssignee(e.target.value)}
+                    aria-label="New subtask assignee"
+                  >
+                    <option value="">Assignee</option>
+                    {people.map((p) => (
+                      <option key={p} value={p}>
+                        {p}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    className="cu-subtask-select"
+                    value={newSubtaskPriority}
+                    onChange={(e) => setNewSubtaskPriority(e.target.value as IssuePriority)}
+                    aria-label="New subtask priority"
+                  >
+                    {(["Highest", "High", "Medium", "Low", "Lowest"] as IssuePriority[]).map((p) => (
+                      <option key={p} value={p}>
+                        {p}
+                      </option>
+                    ))}
+                  </select>
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="create-button"
+                    disabled={!newSubtaskTitle.trim()}
+                    onClick={submitNewSubtask}
+                  >
+                    Save
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      setAddingSubtask(false);
+                      setNewSubtaskTitle("");
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  className="cu-subtask-quick-add"
+                  onClick={() => setAddingSubtask(true)}
+                >
+                  <Plus size={14} /> New subtask
+                </button>
               )}
             </section>
 
@@ -1186,7 +1320,7 @@ export function IssueDrawer({
                         <p>
                           <strong>{item.author}</strong> <small>{item.time}</small>
                         </p>
-                        <p>{item.text}</p>
+                        <div className="rte-rendered-content" dangerouslySetInnerHTML={{ __html: markdownToHtml(item.text) }} />
                       </div>
                     </div>
                   ))}
@@ -1194,38 +1328,20 @@ export function IssueDrawer({
               )}
               <div className="comment-composer rich-comment-composer">
                 <span className="avatar avatar-mint">TC</span>
-                <div className="rich-editor comment-rich-box">
-                  <div className="rich-toolbar">
-                    <Button type="button" variant="ghost" size="sm" className="ci-text-btn" onClick={() => setComment((prev) => `${prev}## `)}>
-                      Text <ChevronDown size={12} />
-                    </Button>
-                    <span className="drawer-divider" />
-                    <Button type="button" variant="ghost" size="icon" title="Bold" onClick={() => setComment((prev) => `${prev}**bold**`)}>
-                      <strong>B</strong>
-                    </Button>
-                    <Button type="button" variant="ghost" size="icon" title="Italic" onClick={() => setComment((prev) => `${prev}_italic_`)}>
-                      <em>I</em>
-                    </Button>
-                    <Button type="button" variant="ghost" size="icon" title="Code" onClick={() => setComment((prev) => `${prev}\`code\``)}>
-                      <Code2 size={14} />
-                    </Button>
-                    <Button type="button" variant="ghost" size="icon" title="Checklist" onClick={() => setComment((prev) => `${prev}\n- [ ] `)}>
-                      <CheckCheck size={14} />
-                    </Button>
-                  </div>
-                  <Textarea
-                    aria-label="Write a comment"
-                    className="rich-description comment-rich-textarea"
+                <div className="comment-rich-box">
+                  <RichTextEditor
+                    ariaLabel="Write a comment"
                     placeholder="Write a comment... paste or drop images and files · Ctrl+↵ to send"
                     value={comment}
-                    onChange={(event) => setComment(event.target.value)}
+                    onChange={setComment}
+                    minHeight={88}
+                    showFooterHint={false}
                     onKeyDown={(event) => {
                       if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
                         event.preventDefault();
                         submitComment();
                       }
                     }}
-                    rows={3}
                   />
                 </div>
               </div>

@@ -441,156 +441,648 @@ function AiClientLogo({ name, size = 16 }: { name: string; size?: number }) {
   );
 }
 
-export function IntegrationView({ onCopy }: { onCopy: (text: string) => void }) {
-  const clients = [
-    { name: "Claude Code", logo: "C", cls: "client-claude", command: "claude mcp add --transport http workrail https://mcp.yourdomain.com/mcp" },
-    { name: "Cursor", logo: "◉", cls: "client-cursor", command: "Add https://mcp.yourdomain.com/mcp as an MCP server in Cursor settings." },
-    { name: "VS Code", logo: "⌘", cls: "client-vscode", command: "Add the workrail MCP server to your VS Code mcp.json configuration." },
-    { name: "ChatGPT", logo: "◎", cls: "client-chatgpt", command: "Connect workrail from your ChatGPT developer settings." },
-    { name: "Windsurf", logo: "≋", cls: "client-windsurf", command: "Add workrail as a remote MCP server in Windsurf settings." },
-    { name: "Gemini CLI", logo: "✳", cls: "client-gemini", command: "Add workrail as a remote MCP server in Gemini CLI settings." },
-  ];
-  const [selected, setSelected] = useState(
-    clients[0] ?? {
-      name: "Claude Code",
-      logo: "C",
-      cls: "client-claude",
-      command: "claude mcp add --transport http workrail https://mcp.yourdomain.com/mcp",
+type ToolItem = {
+  id: string;
+  title: string;
+  desc: string;
+  kb: number;
+  essentialDefault: boolean;
+};
+
+const MCP_TOOLS: ToolItem[] = [
+  {
+    id: "working_on",
+    title: "Working on",
+    desc: "what each agent is doing on a card and which files it touches",
+    kb: 7,
+    essentialDefault: true,
+  },
+  {
+    id: "inbox",
+    title: "Inbox",
+    desc: "your notifications (the bell)",
+    kb: 4,
+    essentialDefault: false,
+  },
+  {
+    id: "releases",
+    title: "Releases",
+    desc: "plan releases and put issues in them",
+    kb: 24,
+    essentialDefault: false,
+  },
+  {
+    id: "sprints",
+    title: "Sprints",
+    desc: "scrum sprints and burndown",
+    kb: 11,
+    essentialDefault: true,
+  },
+  {
+    id: "sales",
+    title: "Sales documents",
+    desc: "quotations, billing notes, receipts",
+    kb: 7,
+    essentialDefault: false,
+  },
+  {
+    id: "support",
+    title: "Support cases",
+    desc: "support cases with the Workrail team",
+    kb: 16,
+    essentialDefault: false,
+  },
+  {
+    id: "insights",
+    title: "Insights",
+    desc: "manager numbers and automatic summaries",
+    kb: 10,
+    essentialDefault: false,
+  },
+  {
+    id: "files",
+    title: "Files and doc history",
+    desc: "raw md files, doc history and restore, delete docs",
+    kb: 18,
+    essentialDefault: true,
+  },
+  {
+    id: "attachments",
+    title: "Attachments",
+    desc: "files attached to issues",
+    kb: 7,
+    essentialDefault: false,
+  },
+  {
+    id: "votes",
+    title: "Votes and watchers",
+    desc: "votes and watching issues",
+    kb: 8,
+    essentialDefault: false,
+  },
+];
+
+const CORE_TOOLS_KB = 92; // Base core issues/projects tools so 92 + 112 = 204 KB full
+
+export function IntegrationView({ onCopy }: { onCopy: (text: string, message?: string) => void }) {
+  const [agents, setAgents] = useState<{ id: string; name: string; role: string; paused: boolean }[]>([]);
+  const [tokens, setTokens] = useState<{ id: string; name: string; role: string; expiry: string; preview: string }[]>([]);
+  const [tokenName, setTokenName] = useState("Claude Code");
+  const [tokenRole, setTokenRole] = useState("");
+  const [tokenExpiry, setTokenExpiry] = useState("90 days");
+  const [signedInApps, setSignedInApps] = useState([
+    {
+      id: "chatgpt-oauth",
+      name: "ChatGPT",
+      via: "signed in via browser",
+      lastUsed: "last used 6d ago",
+      expires: "expires 16 Nov 2027",
+      role: "Admin",
     },
+  ]);
+
+  const [aiClient, setAiClient] = useState("Claude Code");
+  const [toolSetMode, setToolSetMode] = useState<"Full" | "Essential" | "Custom">("Full");
+  const [enabledTools, setEnabledTools] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries(MCP_TOOLS.map((t) => [t.id, true])),
   );
 
+  const selectToolPreset = (preset: "Full" | "Essential" | "Custom") => {
+    setToolSetMode(preset);
+    if (preset === "Full") {
+      setEnabledTools(Object.fromEntries(MCP_TOOLS.map((t) => [t.id, true])));
+    } else if (preset === "Essential") {
+      setEnabledTools(Object.fromEntries(MCP_TOOLS.map((t) => [t.id, t.essentialDefault])));
+    }
+  };
+
+  const toggleTool = (id: string) => {
+    setEnabledTools((prev) => {
+      const next = { ...prev, [id]: !prev[id] };
+      const allOn = MCP_TOOLS.every((t) => next[t.id]);
+      const allEssential = MCP_TOOLS.every((t) => Boolean(next[t.id]) === t.essentialDefault);
+      setToolSetMode(allOn ? "Full" : allEssential ? "Essential" : "Custom");
+      return next;
+    });
+  };
+
+  const optionalKb = MCP_TOOLS.reduce((sum, t) => sum + (enabledTools[t.id] ? t.kb : 0), 0);
+  const totalKb = CORE_TOOLS_KB + optionalKb;
+  const maxKb = CORE_TOOLS_KB + MCP_TOOLS.reduce((sum, t) => sum + t.kb, 0); // 204 KB
+  const approxTokensK = Math.round(totalKb / 4);
+  const barPercent = Math.min(100, Math.round((totalKb / maxKb) * 100));
+
+  const toolsQuery =
+    toolSetMode === "Full"
+      ? ""
+      : toolSetMode === "Essential"
+        ? "?tools=essential"
+        : `?tools=${MCP_TOOLS.filter((t) => enabledTools[t.id])
+            .map((t) => t.id)
+            .join(",")}`;
+
+  const mcpUrl = `https://mcp.workrail.ai/mcp${toolsQuery || "?tools=essential"}`;
+
+  const clientCommands: Record<string, { title: string; command: string; steps: string[] }> = {
+    "Claude Code": {
+      title: "Shortcut for Claude Code",
+      command: `claude mcp add --transport http workrail "${mcpUrl}"`,
+      steps: ["1. Run the command in a terminal", "2. In Claude Code type /mcp and pick workrail to sign in"],
+    },
+    Cursor: {
+      title: "Shortcut for Cursor",
+      command: `cursor --add-mcp '{"name":"workrail","url":"${mcpUrl}"}'`,
+      steps: ["1. Run the command or add the URL in Cursor → Settings → MCP", "2. Click Connect to sign in via browser"],
+    },
+    "VS Code": {
+      title: "Shortcut for VS Code",
+      command: `code --add-mcp '{"name":"workrail","type":"http","url":"${mcpUrl}"}'`,
+      steps: ["1. Run the command in a terminal", "2. Open GitHub Copilot Chat in Agent mode and authorize Workrail"],
+    },
+    Windsurf: {
+      title: "Shortcut for Windsurf",
+      command: `windsurf mcp add workrail "${mcpUrl}"`,
+      steps: ["1. Add the server URL to your Windsurf mcp_config.json", "2. Sign in when prompted in browser"],
+    },
+    "Gemini CLI": {
+      title: "Shortcut for Gemini CLI",
+      command: `gemini mcp add --http workrail "${mcpUrl}"`,
+      steps: ["1. Run the command in your terminal", "2. Authenticate in your browser to link your workspace"],
+    },
+    ChatGPT: {
+      title: "Shortcut for ChatGPT",
+      command: mcpUrl,
+      steps: ["1. Open ChatGPT Settings → Connectors → Add custom MCP", "2. Paste the URL above and sign in with OAuth"],
+    },
+  };
+
+  const currentClient = clientCommands[aiClient] ?? clientCommands["Claude Code"]!;
+
+  const handleCreateAgent = () => {
+    if (agents.length >= 10) return;
+    const nextNum = agents.length + 1;
+    const created = {
+      id: `agent-${Date.now()}`,
+      name: `release-agent-${nextNum}`,
+      role: "Developer",
+      paused: false,
+    };
+    setAgents((prev) => [...prev, created]);
+    onCopy(created.name, `Created agent ${created.name}`);
+  };
+
+  const handleCreateToken = () => {
+    const cleanName = tokenName.trim() || "Claude Code";
+    const secret = `bm_pat_${Math.random().toString(36).slice(2, 10)}${Math.random().toString(36).slice(2, 8)}`;
+    setTokens((prev) => [
+      {
+        id: `tok-${Date.now()}`,
+        name: cleanName,
+        role: tokenRole.trim() || "General",
+        expiry: tokenExpiry,
+        preview: `${secret.slice(0, 11)}…`,
+      },
+      ...prev,
+    ]);
+    onCopy(secret, `Token created and copied for ${cleanName}`);
+  };
+
+  const handleConvertAppToAgent = (appId: string, appName: string) => {
+    setSignedInApps((prev) => prev.filter((a) => a.id !== appId));
+    setAgents((prev) => [
+      ...prev,
+      {
+        id: `agent-${Date.now()}`,
+        name: `${appName.toLowerCase()}-agent`,
+        role: "Admin",
+        paused: false,
+      },
+    ]);
+    onCopy(`${appName.toLowerCase()}-agent`, `Converted ${appName} to an agent account`);
+  };
+
   return (
-    <div className="subpage">
-      <SectionHeading
-        eyebrow="HUMAN + AI COLLABORATION"
-        title="MCP & AI integrations"
-        description="Connect the AI tools your team uses while keeping clear boundaries."
-        action={
-          <span className="connected-pill">
-            <span className="live-dot" /> Workspace connected
-          </span>
-        }
-      />
-      <div className="integration-layout">
-        <div className="integration-main">
-          <section className="integration-section">
-            <div className="deal-list-heading">
-              <div>
-                <h3>Connect an AI client</h3>
-                <p>Choose a client to view its connection instructions.</p>
-              </div>
-              <span className="soft-pill">6 clients</span>
-            </div>
-            <div className="client-grid">
-              {clients.map((client) => (
-                <button
-                  key={client.name}
-                  className={`client-card ${selected.name === client.name ? "client-selected" : ""}`}
-                  onClick={() => setSelected(client)}
-                >
-                  <span className={`client-logo ${client.cls}`}>
-                    <AiClientLogo name={client.name} size={15} />
-                  </span>
-                  <span>{client.name}</span>
-                  <ChevronRight size={15} />
+    <div className="agent-mcp-page">
+      <div className="agent-mcp-container">
+        <header className="agent-mcp-header">
+          <h1>Agent &amp; MCP access</h1>
+          <p>Tokens are tied to you and to THANET CHANKHUA — an agent can do what you can, no more.</p>
+        </header>
+
+        <div className="agent-mcp-grid">
+          {/* LEFT COLUMN */}
+          <div className="agent-mcp-col">
+            {/* MY AGENTS CARD */}
+            <section className="am-card">
+              <span className="am-card-eyebrow">MY AGENTS</span>
+              <p className="am-card-desc">
+                An agent account is a named AI agent of your company that you own: it works with your rights, keeps a run log and has a pause button — on every plan, and it never takes a seat.
+              </p>
+              <p className="am-card-desc">
+                Already use a personal token in an AI client? Use &ldquo;Convert to agent account&rdquo; on that token below to move it to one of these agents.
+              </p>
+
+              <div className="am-btn-row">
+                <button type="button" className="am-lime-btn" onClick={handleCreateAgent}>
+                  <Plus size={15} /> Create agent
                 </button>
-              ))}
-            </div>
-            <div className="connection-snippet">
-              <div>
-                <span className="eyebrow">{selected.name.toUpperCase()} CONNECTION</span>
-                <p>{selected.command}</p>
+                <button
+                  type="button"
+                  className="am-outline-btn"
+                  onClick={() => onCopy("Manage all company agents", "Opened company agents directory")}
+                >
+                  <Sparkles size={14} /> Manage all company agents
+                </button>
               </div>
-              <Button size="sm" variant="outline" onClick={() => onCopy(selected.command)}>
-                <Code2 size={14} /> Copy setup
-              </Button>
-            </div>
-          </section>
 
-          <section className="integration-section token-section">
-            <div className="deal-list-heading">
-              <div>
-                <h3>Personal access tokens</h3>
-                <p>Scoped credentials for scripts and CI/CD workflows.</p>
+              <div className="am-limit-bar">
+                <span className="am-limit-label">COMPANY AGENT LIMIT</span>
+                <span className="am-beta-pill">Beta</span>
+                <strong>{agents.length} of 10 used</strong>
               </div>
-              <Button size="sm" onClick={() => onCopy(`wr_pat_${globalThis.crypto.randomUUID().replaceAll("-", "").slice(0, 20)}`)}>
-                <Plus size={14} /> Generate token
-              </Button>
-            </div>
-            <div className="token-row">
-              <span className="token-icon">
-                <LockKeyhole size={16} />
-              </span>
-              <div>
-                <strong>ci-release-bot</strong>
-                <small>
-                  <span className="token-status-dot" /> Active · Read & write issues · Expires Dec 31, 2026
-                </small>
+
+              {agents.length === 0 ? (
+                <div className="am-dashed-empty">
+                  You have no agents yet — create one to give an AI its own name, history and stop button.
+                </div>
+              ) : (
+                <div className="am-item-list">
+                  {agents.map((ag) => (
+                    <div key={ag.id} className="am-list-row">
+                      <div className="am-list-main">
+                        <strong>{ag.name}</strong>
+                        <span className="am-role-tag">{ag.role}</span>
+                        <small>{ag.paused ? "Paused" : "Active · 0 runs today"}</small>
+                      </div>
+                      <div className="am-row-actions">
+                        <button
+                          type="button"
+                          className="am-outline-btn am-btn-xs"
+                          onClick={() =>
+                            setAgents((prev) =>
+                              prev.map((item) => (item.id === ag.id ? { ...item, paused: !item.paused } : item)),
+                            )
+                          }
+                        >
+                          {ag.paused ? "Resume" : "Pause"}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+
+            {/* PERSONAL ACCESS TOKENS CARD */}
+            <section className="am-card">
+              <div className="am-card-head-row">
+                <span className="am-card-eyebrow">PERSONAL ACCESS TOKENS</span>
+                <span className="am-scope-pill">✓ scopes = same as you (user parity)</span>
               </div>
-              <Button variant="ghost" size="icon" title="Token options">
-                <Ellipsis size={17} />
-              </Button>
-            </div>
-          </section>
+
+              <div className="am-token-form">
+                <input
+                  type="text"
+                  className="am-input"
+                  value={tokenName}
+                  onChange={(e) => setTokenName(e.target.value)}
+                  placeholder="Claude Code"
+                  aria-label="Token name"
+                />
+                <input
+                  type="text"
+                  className="am-input"
+                  value={tokenRole}
+                  onChange={(e) => setTokenRole(e.target.value)}
+                  placeholder="e.g. Developer, QA"
+                  aria-label="Agent role"
+                />
+                <select
+                  className="am-select"
+                  value={tokenExpiry}
+                  onChange={(e) => setTokenExpiry(e.target.value)}
+                  aria-label="Token expiration"
+                >
+                  <option value="30 days">30 days</option>
+                  <option value="90 days">90 days</option>
+                  <option value="1 year">1 year</option>
+                  <option value="No expiry">No expiry</option>
+                </select>
+                <button type="button" className="am-lime-btn" onClick={handleCreateToken}>
+                  <Plus size={15} /> New token
+                </button>
+              </div>
+
+              <p className="am-card-subhint">
+                Your agent learns its role from this; Workrail warns it when it steps into another role&apos;s work.
+              </p>
+
+              {tokens.length === 0 ? (
+                <div className="am-dashed-empty">No personal access tokens yet</div>
+              ) : (
+                <div className="am-item-list">
+                  {tokens.map((tok) => (
+                    <div key={tok.id} className="am-list-row">
+                      <div className="am-list-main">
+                        <strong>{tok.name}</strong>
+                        <span className="am-role-tag">{tok.role}</span>
+                        <code>{tok.preview}</code>
+                        <small>Expires in {tok.expiry}</small>
+                      </div>
+                      <div className="am-row-actions">
+                        <button
+                          type="button"
+                          className="am-outline-btn am-btn-xs"
+                          onClick={() => {
+                            setTokens((prev) => prev.filter((item) => item.id !== tok.id));
+                            setAgents((prev) => [
+                              ...prev,
+                              { id: `agent-${Date.now()}`, name: tok.name.toLowerCase().replace(/\s+/g, "-"), role: tok.role, paused: false },
+                            ]);
+                          }}
+                        >
+                          ⇄ Convert to agent account
+                        </button>
+                        <button
+                          type="button"
+                          className="am-danger-btn am-btn-xs"
+                          onClick={() => setTokens((prev) => prev.filter((item) => item.id !== tok.id))}
+                        >
+                          Revoke
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+
+            {/* SIGNED-IN APPS CARD */}
+            <section className="am-card">
+              <div className="am-card-head-row">
+                <span className="am-card-eyebrow">SIGNED-IN APPS</span>
+                <span className="am-neutral-pill">OAuth</span>
+              </div>
+
+              {signedInApps.length === 0 ? (
+                <div className="am-dashed-empty">No OAuth apps currently signed in</div>
+              ) : (
+                <div className="am-item-list">
+                  {signedInApps.map((app) => (
+                    <div key={app.id} className="am-oauth-row">
+                      <div className="am-oauth-left">
+                        <span className="am-oauth-logo">
+                          <AiClientLogo name={app.name} size={18} />
+                        </span>
+                        <div className="am-oauth-meta">
+                          <strong>{app.name}</strong>
+                          <div className="am-oauth-sub">
+                            <span>{app.via}</span>
+                            <span>·</span>
+                            <span>{app.lastUsed}</span>
+                          </div>
+                          <div className="am-oauth-sub">
+                            <span>{app.expires}</span>
+                            <span className="am-role-tag">{app.role}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="am-oauth-actions">
+                        <span className="am-cyan-badge">&lt;&gt; OAuth app</span>
+                        <button
+                          type="button"
+                          className="am-outline-btn am-btn-xs"
+                          onClick={() => handleConvertAppToAgent(app.id, app.name)}
+                        >
+                          ⇄ Convert to agent account
+                        </button>
+                        <button
+                          type="button"
+                          className="am-danger-btn am-btn-xs"
+                          onClick={() => setSignedInApps((prev) => prev.filter((a) => a.id !== app.id))}
+                        >
+                          Sign out app
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+
+            {/* RECENT COMMITS BY YOUR AGENTS */}
+            <section className="am-card">
+              <span className="am-card-eyebrow">RECENT COMMITS BY YOUR AGENTS · MD TREE (GET_HISTORY)</span>
+              <div className="am-commit-row">
+                <div className="am-commit-left">
+                  <code className="am-commit-hash">574c54e</code>
+                  <span className="am-commit-msg">create TOPIA-1</span>
+                </div>
+                <div className="am-commit-right">
+                  <span className="am-cyan-badge">&lt;&gt; MCP</span>
+                  <small>6d</small>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          {/* RIGHT COLUMN */}
+          <div className="agent-mcp-col">
+            {/* CONNECT AN AI AGENT CARD */}
+            <section className="am-card">
+              <div className="am-card-head-row">
+                <h2 className="am-card-title">Connect an AI agent</h2>
+                <span className="am-cyan-badge">&lt;&gt; Streamable HTTP</span>
+              </div>
+              <p className="am-card-desc">
+                Add Workrail as an MCP server to any AI agent and it sees the same projects as you. Every write must send{" "}
+                <code className="am-inline-code">version</code> and records <code className="am-inline-code">agent_token_id</code> in the commit.
+              </p>
+
+              {/* Sub-box 1: Any AI assistant */}
+              <div className="am-tinted-box">
+                <div className="am-tinted-head">
+                  <strong>
+                    <FileCode2 size={14} /> Any AI assistant — one link, no setup
+                  </strong>
+                  <button
+                    type="button"
+                    className="am-outline-btn am-btn-xs"
+                    onClick={() =>
+                      onCopy(
+                        "Read https://www.workrail.ai/agents.md and help me use Workrail.",
+                        "Copied assistant message",
+                      )
+                    }
+                  >
+                    Copy message
+                  </button>
+                </div>
+                <p className="am-card-desc">
+                  Send this to ChatGPT, Claude, Gemini, Copilot or any assistant: it reads the guide for AI agents and knows what Workrail is and how to use it, even without MCP.
+                </p>
+                <div className="am-mono-line">Read https://www.workrail.ai/agents.md and help me use Workrail.</div>
+                <a
+                  href="#agents-md"
+                  className="am-green-link"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    onCopy("https://www.workrail.ai/agents.md", "Copied agents.md URL");
+                  }}
+                >
+                  Open the guide for AI agents (agents.md) →
+                </a>
+              </div>
+
+              {/* Sub-box 2: Let your agent set itself up */}
+              <div className="am-tinted-box">
+                <div className="am-tinted-head">
+                  <strong>
+                    <Sparkles size={14} /> Let your agent set itself up
+                  </strong>
+                  <button
+                    type="button"
+                    className="am-outline-btn am-btn-xs"
+                    onClick={() =>
+                      onCopy(
+                        "Connect yourself to Workrail: read https://mcp.workrail.ai/connect.md and follow the steps for the client you are running in.",
+                        "Copied setup prompt",
+                      )
+                    }
+                  >
+                    Copy prompt
+                  </button>
+                </div>
+                <div className="am-mono-line">
+                  Connect yourself to Workrail: read https://mcp.workrail.ai/connect.md and follow the steps for the client you are running in.
+                </div>
+                <a
+                  href="#connect-md"
+                  className="am-green-link"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    onCopy("https://mcp.workrail.ai/connect.md", "Copied connect.md URL");
+                  }}
+                >
+                  All clients (connect.md) →
+                </a>
+              </div>
+
+              {/* AI client selector */}
+              <div className="am-client-picker-row">
+                <label htmlFor="am-ai-client-select">AI client</label>
+                <select
+                  id="am-ai-client-select"
+                  className="am-select am-client-select"
+                  value={aiClient}
+                  onChange={(e) => setAiClient(e.target.value)}
+                >
+                  {Object.keys(clientCommands).map((name) => (
+                    <option key={name} value={name}>
+                      {name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Shortcut box */}
+              <div className="am-shortcut-box">
+                <div className="am-shortcut-title">
+                  <AiClientLogo name={aiClient} size={15} />
+                  <strong>{currentClient.title}</strong>
+                </div>
+                <pre className="am-command-code">{currentClient.command}</pre>
+                <div>
+                  <button
+                    type="button"
+                    className="am-lime-btn am-btn-sm"
+                    onClick={() => onCopy(currentClient.command, `Copied ${aiClient} command`)}
+                  >
+                    Copy command
+                  </button>
+                </div>
+                <div className="am-shortcut-steps">
+                  {currentClient.steps.map((step, i) => (
+                    <span key={i}>{step}</span>
+                  ))}
+                </div>
+              </div>
+            </section>
+
+            {/* TOOL SET — SAVE TOKENS CARD */}
+            <section className="am-card">
+              <div className="am-card-head-row">
+                <h2 className="am-card-title">Tool set — save tokens</h2>
+                <span className="am-neutral-pill">?tools=</span>
+              </div>
+              <p className="am-card-desc">
+                An agent that doesn&apos;t need every feature can load fewer tools. Choose what this connection gets — the URL in the config below changes with it.
+              </p>
+
+              {/* Segmented control: Full | Essential | Custom */}
+              <div className="am-segmented" role="tablist" aria-label="Tool set preset">
+                {(["Full", "Essential", "Custom"] as const).map((tab) => (
+                  <button
+                    key={tab}
+                    type="button"
+                    role="tab"
+                    aria-selected={toolSetMode === tab}
+                    className={toolSetMode === tab ? "is-active" : ""}
+                    onClick={() => selectToolPreset(tab)}
+                  >
+                    {tab}
+                  </button>
+                ))}
+              </div>
+
+              {/* 2-column grid of 10 tool toggles */}
+              <div className="am-tools-grid">
+                {MCP_TOOLS.map((tool) => {
+                  const isOn = Boolean(enabledTools[tool.id]);
+                  return (
+                    <button
+                      key={tool.id}
+                      type="button"
+                      className={`am-tool-card ${isOn ? "is-on" : "is-off"}`}
+                      onClick={() => toggleTool(tool.id)}
+                      aria-pressed={isOn}
+                    >
+                      <span className={`am-switch ${isOn ? "is-on" : ""}`}>
+                        <i />
+                      </span>
+                      <div className="am-tool-copy">
+                        <strong>{tool.title}</strong>
+                        <small>{tool.desc}</small>
+                      </div>
+                      <span className="am-tool-kb">+{tool.kb} KB</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Token usage bar */}
+              <div className="am-usage-summary">
+                <strong>
+                  ≈ {totalKb} KB · ≈ {approxTokensK}k tokens per session (all tools ≈ {maxKb} KB)
+                </strong>
+                <div className="am-usage-bar">
+                  <i style={{ width: `${barPercent}%` }} />
+                </div>
+                <p className="am-usage-foot">
+                  The URL only changes this connection — sign-in with OAuth keeps working, and you can change the tool set later by editing the URL.{" "}
+                  <button
+                    type="button"
+                    className="am-outline-btn am-btn-xs"
+                    onClick={() => onCopy(mcpUrl, "Copied current tool set URL")}
+                  >
+                    About tool sets →
+                  </button>
+                </p>
+              </div>
+            </section>
+          </div>
         </div>
-
-        <aside className="trust-panel">
-          <span className="trust-icon">
-            <ShieldCheck size={20} />
-          </span>
-          <span className="eyebrow">YOUR SECURITY BOUNDARY</span>
-          <h3>Clear permissions, built in.</h3>
-          <div className="trust-block trust-allowed">
-            <strong>
-              <Check size={14} /> Available to AI agents
-            </strong>
-            <p>Read and update issues, add comments and mentions, follow project workflow rules, and draft commercial documents.</p>
-          </div>
-          <div className="trust-block trust-blocked">
-            <strong>
-              <LockKeyhole size={13} /> Protected from AI agents
-            </strong>
-            <p>Team and seat management, company billing, project administration, account security, and webhook settings.</p>
-          </div>
-          <small>Every AI action stays attributable to the person who authorized it.</small>
-        </aside>
       </div>
-
-      <section className="session-section">
-        <div className="deal-list-heading">
-          <div>
-            <h3>Active AI sessions</h3>
-            <p>Sessions connected to your current project.</p>
-          </div>
-          <span className="soft-pill">3 active</span>
-        </div>
-        <div className="session-row">
-          <span className="client-logo client-claude">
-            <AiClientLogo name="Claude Code" size={15} />
-          </span>
-          <span>
-            <strong>Claude Code</strong>
-            <small>Alex Morgan · Active now</small>
-          </span>
-          <span className="session-project">Storefront refresh</span>
-          <Button size="sm" variant="outline" onClick={() => setSelected(clients[0] ?? selected)}>
-            Revoke
-          </Button>
-        </div>
-        <div className="session-row">
-          <span className="client-logo client-cursor">
-            <AiClientLogo name="Cursor" size={15} />
-          </span>
-          <span>
-            <strong>Cursor</strong>
-            <small>Maya Chen · Active 18 min ago</small>
-          </span>
-          <span className="session-project">Storefront refresh</span>
-          <Button size="sm" variant="outline">
-            Revoke
-          </Button>
-        </div>
-      </section>
     </div>
   );
 }

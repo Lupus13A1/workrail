@@ -49,6 +49,13 @@ function HomeWorkspace() {
   useEffect(() => {
     const hour = new Date().getHours();
     setGreeting(hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening");
+    const params = new URLSearchParams(window.location.search);
+    const viewParam = params.get("view") as WorkspaceView | null;
+    if (viewParam) {
+      setSubpage(viewParam);
+    } else if (params.get("myWork") === "1") {
+      setMyWorkOnly(true);
+    }
   }, []);
 
   const openProject = (project: Project) => {

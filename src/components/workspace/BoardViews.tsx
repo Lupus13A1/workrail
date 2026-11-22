@@ -57,6 +57,7 @@ export function PriorityLabel({ priority }: { priority: Issue["priority"] }) {
 export function BoardView({
   boardColumns,
   visibleIssues,
+  allIssues = visibleIssues,
   hasActiveFilters,
   boardLayout,
   compactView,
@@ -69,9 +70,12 @@ export function BoardView({
   onOpenIssue,
   onVoteIssue,
   onMoveIssue,
+  onCreateSubtask,
+  onToggleSubtaskDone,
 }: {
   boardColumns: string[];
   visibleIssues: Issue[];
+  allIssues?: Issue[];
   hasActiveFilters: boolean;
   boardLayout: "columns" | "list";
   compactView: boolean;
@@ -84,6 +88,8 @@ export function BoardView({
   onOpenIssue: (id: string) => void;
   onVoteIssue: (id: string) => void;
   onMoveIssue: (draggedId: string, changes: Partial<Issue>, targetId?: string, noticeText?: string) => void;
+  onCreateSubtask?: (parentIssue: Issue, title: string) => Issue | null;
+  onToggleSubtaskDone?: (subtask: Issue) => void;
 }) {
   const [dragIssueId, setDragIssueId] = useState<string | null>(null);
   const [dropColumn, setDropColumn] = useState<string | null>(null);
@@ -227,40 +233,46 @@ export function BoardView({
                   </div>
                   {!collapsed && (
                     <div className="issue-list">
-                      {columnIssues.map((issue) => (
-                        <IssueCard
-                          key={issue.id}
-                          issue={issue}
-                          compact={compactView}
-                          selectMode={selectMode}
-                          selected={selectedIds.includes(issue.id)}
-                          isDragging={dragIssueId === issue.id}
-                          onToggleSelect={() => onToggleSelect(issue.id)}
-                          onDragStart={(event) => {
-                            event.dataTransfer.effectAllowed = "move";
-                            event.dataTransfer.setData("text/plain", issue.id);
-                            setDragIssueId(issue.id);
-                          }}
-                          onDragEnd={() => {
-                            setDragIssueId(null);
-                            setDropColumn(null);
-                          }}
-                          onDragOver={(event) => {
-                            event.preventDefault();
-                            event.dataTransfer.dropEffect = "move";
-                          }}
-                          onDrop={(event) => {
-                            event.preventDefault();
-                            event.stopPropagation();
-                            const droppedId = event.dataTransfer.getData("text/plain") || dragIssueId;
-                            setDropColumn(null);
-                            setDragIssueId(null);
-                            if (droppedId) onMoveIssue(droppedId, { status: column }, issue.id, `Moved to ${column}`);
-                          }}
-                          onOpen={() => onOpenIssue(issue.id)}
-                          onVote={() => onVoteIssue(issue.id)}
-                        />
-                      ))}
+                      {columnIssues
+                        .filter((issue) => issue.type !== "Subtask" || !issue.parent)
+                        .map((issue) => (
+                          <IssueCard
+                            key={issue.id}
+                            issue={issue}
+                            subtasks={allIssues.filter((sub) => sub.parent === issue.key)}
+                            compact={compactView}
+                            selectMode={selectMode}
+                            selected={selectedIds.includes(issue.id)}
+                            isDragging={dragIssueId === issue.id}
+                            onToggleSelect={() => onToggleSelect(issue.id)}
+                            onDragStart={(event) => {
+                              event.dataTransfer.effectAllowed = "move";
+                              event.dataTransfer.setData("text/plain", issue.id);
+                              setDragIssueId(issue.id);
+                            }}
+                            onDragEnd={() => {
+                              setDragIssueId(null);
+                              setDropColumn(null);
+                            }}
+                            onDragOver={(event) => {
+                              event.preventDefault();
+                              event.dataTransfer.dropEffect = "move";
+                            }}
+                            onDrop={(event) => {
+                              event.preventDefault();
+                              event.stopPropagation();
+                              const droppedId = event.dataTransfer.getData("text/plain") || dragIssueId;
+                              setDropColumn(null);
+                              setDragIssueId(null);
+                              if (droppedId) onMoveIssue(droppedId, { status: column }, issue.id, `Moved to ${column}`);
+                            }}
+                            onOpen={() => onOpenIssue(issue.id)}
+                            onOpenSubtask={(subId) => onOpenIssue(subId)}
+                            onCreateSubtask={(title) => onCreateSubtask?.(issue, title)}
+                            onToggleSubtaskDone={(sub) => onToggleSubtaskDone?.(sub)}
+                            onVote={() => onVoteIssue(issue.id)}
+                          />
+                        ))}
                       {columnIssues.length === 0 && (
                         <div className="empty-column empty-column-box">{hasActiveFilters ? "No matching issues" : "Empty"}</div>
                       )}
@@ -278,6 +290,7 @@ export function BoardView({
 
 function IssueCard({
   issue,
+  subtasks = [],
   compact = false,
   selectMode = false,
   selected = false,
@@ -288,9 +301,13 @@ function IssueCard({
   onDragOver,
   onDrop,
   onOpen,
+  onOpenSubtask,
+  onCreateSubtask,
+  onToggleSubtaskDone,
   onVote,
 }: {
   issue: Issue;
+  subtasks?: Issue[];
   compact?: boolean;
   selectMode?: boolean;
   selected?: boolean;
@@ -301,8 +318,16 @@ function IssueCard({
   onDragOver?: (event: DragEvent<HTMLElement>) => void;
   onDrop?: (event: DragEvent<HTMLElement>) => void;
   onOpen: () => void;
+  onOpenSubtask?: (subtaskId: string) => void;
+  onCreateSubtask?: (title: string) => void;
+  onToggleSubtaskDone?: (subtask: Issue) => void;
   onVote: () => void;
 }) {
+  const [subtasksExpanded, setSubtasksExpanded] = useState(false);
+  const [quickSubtaskOpen, setQuickSubtaskOpen] = useState(false);
+  const [quickSubtaskTitle, setQuickSubtaskTitle] = useState("");
+  const doneCount = subtasks.filter((s) => s.status === "Done").length;
+
   return (
     <article
       className={`issue-card ${compact ? "is-compact" : ""} ${selected ? "is-selected" : ""} ${isDragging ? "is-dragging" : ""}`}
@@ -344,8 +369,84 @@ function IssueCard({
               {tag}
             </span>
           ))}
+          {subtasks.length > 0 && (
+            <button
+              type="button"
+              className={`cu-card-subtask-pill ${subtasksExpanded ? "is-expanded" : ""}`}
+              title="Toggle subtasks"
+              onClick={() => setSubtasksExpanded((v) => !v)}
+            >
+              <span>↳</span>
+              <span>
+                {doneCount}/{subtasks.length}
+              </span>
+              {subtasksExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+            </button>
+          )}
         </div>
       )}
+
+      {!compact && (subtasksExpanded || quickSubtaskOpen) && (
+        <div className="cu-card-subtasks-box">
+          {subtasks.map((sub) => {
+            const isDone = sub.status === "Done";
+            return (
+              <div key={sub.id} className={`cu-card-subtask-item ${isDone ? "is-done" : ""}`}>
+                <button
+                  type="button"
+                  className={`cu-subtask-check ${isDone ? "is-checked" : ""}`}
+                  title={isDone ? "Mark as To Do" : "Mark as Done"}
+                  onClick={() => onToggleSubtaskDone?.(sub)}
+                >
+                  {isDone && <Check size={10} />}
+                </button>
+                <button
+                  type="button"
+                  className="cu-card-subtask-link"
+                  onClick={() => onOpenSubtask?.(sub.id)}
+                  title={`Open ${sub.key}: ${sub.title}`}
+                >
+                  <code>{sub.key}</code>
+                  <span>{sub.title}</span>
+                </button>
+              </div>
+            );
+          })}
+
+          {quickSubtaskOpen ? (
+            <div className="cu-card-subtask-form">
+              <input
+                type="text"
+                className="cp-input cu-card-subtask-input"
+                autoFocus
+                placeholder="Subtask name... (Enter)"
+                value={quickSubtaskTitle}
+                onChange={(e) => setQuickSubtaskTitle(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && quickSubtaskTitle.trim()) {
+                    e.preventDefault();
+                    onCreateSubtask?.(quickSubtaskTitle.trim());
+                    setQuickSubtaskTitle("");
+                    setSubtasksExpanded(true);
+                  } else if (e.key === "Escape") {
+                    setQuickSubtaskOpen(false);
+                    setQuickSubtaskTitle("");
+                  }
+                }}
+              />
+            </div>
+          ) : (
+            <button
+              type="button"
+              className="cu-card-add-sub-inline"
+              onClick={() => setQuickSubtaskOpen(true)}
+            >
+              <Plus size={12} /> Add subtask
+            </button>
+          )}
+        </div>
+      )}
+
       <div className="issue-card-footer">
         <div className="issue-metrics">
           <span title="Comments">
@@ -361,6 +462,16 @@ function IssueCard({
           <button onClick={onVote} title="Vote for this issue">
             <ThumbsUp size={13} />
             {issue.votes}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setSubtasksExpanded(true);
+              setQuickSubtaskOpen(true);
+            }}
+            title="Add subtask"
+          >
+            <Plus size={12} /> Subtask
           </button>
         </div>
         <div className="assignee-group">

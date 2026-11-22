@@ -514,6 +514,7 @@ function ProjectWorkspacePage() {
             <BoardView
               boardColumns={activeProject.boardConfig}
               visibleIssues={visibleIssues}
+              allIssues={issues}
               hasActiveFilters={Boolean(query || aiOnly || filterType || filterPriority || filterPerson !== "All teammates")}
               boardLayout={boardLayout}
               compactView={compactView}
@@ -537,6 +538,18 @@ function ProjectWorkspacePage() {
               onMoveIssue={(draggedId, changes, targetId, noticeText) =>
                 store.moveIssue(activeProject.id, draggedId, changes, targetId, noticeText)
               }
+              onCreateSubtask={(parentIssue, title) =>
+                store.addSubtask(activeProject, parentIssue, {
+                  title,
+                  status: activeProject.boardConfig[0] ?? "To Do",
+                })
+              }
+              onToggleSubtaskDone={(subtask) => {
+                const isDone = subtask.status === "Done";
+                store.updateIssue(activeProject.id, subtask.id, {
+                  status: isDone ? activeProject.boardConfig[0] ?? "To Do" : "Done",
+                });
+              }}
             />
           )}
           {view === "Backlog & Sprints" && (
@@ -594,6 +607,10 @@ function ProjectWorkspacePage() {
             setActiveIssueId(null);
           }}
           onCopy={store.copyText}
+          onOpenIssue={(targetId) => setActiveIssueId(targetId)}
+          onCreateSubtask={(data) => store.addSubtask(activeProject, activeIssue, data)}
+          onUpdateSubtask={(subId, changes) => store.updateIssue(activeProject.id, subId, changes)}
+          onDeleteSubtask={(subId, key) => store.deleteIssue(activeProject.id, subId, key)}
         />
       )}
       {newIssueOpen && (

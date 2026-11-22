@@ -40,6 +40,11 @@ type WorkspaceContextValue = {
   moveIssue: (projectId: string, draggedId: string, changes: Partial<Issue>, targetId?: string, noticeText?: string) => void;
   deleteIssue: (projectId: string, id: string, key: string) => void;
   addIssue: (project: Project, form: FormData) => Issue | null;
+  addSubtask: (
+    project: Project,
+    parentIssue: Issue,
+    data: { title: string; assignee?: string; priority?: IssuePriority; status?: string },
+  ) => Issue | null;
   createProject: (name: string, key: string, template: ProjectTemplate) => Project;
   toggleFavorite: (id: string) => void;
   createSprint: (projectId: string, sprint: Omit<SprintItem, "id" | "status" | "code">) => SprintItem;
@@ -186,6 +191,63 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     return issue;
   };
 
+  const addSubtask = (
+    project: Project,
+    parentIssue: Issue,
+    data: { title: string; assignee?: string; priority?: IssuePriority; status?: string },
+  ): Issue | null => {
+    const cleanTitle = data.title.trim();
+    if (!cleanTitle) return null;
+    const currentIssues = projectIssues[project.id] ?? [];
+    const next = getNextIssueNumber(currentIssues.map((issue) => issue.key));
+    const rawAssignee = data.assignee?.trim() ?? "";
+    const assignee = rawAssignee || "Unassigned";
+    const personInfo = rawAssignee
+      ? peopleAvatars[rawAssignee] ?? (["AM", "avatar-mint"] as [string, string])
+      : (["—", "avatar-extra"] as [string, string]);
+
+    const subtask: Issue = {
+      id: `sub-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      key: `${project.key}-${next}`,
+      title: cleanTitle,
+      status: data.status || project.boardConfig[0] || "To Do",
+      type: "Subtask",
+      priority: data.priority || "Medium",
+      assignee,
+      initials: personInfo[0],
+      color: personInfo[1],
+      comments: 0,
+      attachments: 0,
+      votes: 0,
+      tags: ["Subtask"],
+      description: "",
+      env: parentIssue.env || "Development",
+      release: parentIssue.release || "v1.5.0",
+      parent: parentIssue.key,
+      ...(parentIssue.sprint ? { sprint: parentIssue.sprint } : {}),
+    };
+
+    setProjectIssues((current) => ({
+      ...current,
+      [project.id]: [...(current[project.id] ?? []), subtask],
+    }));
+
+    setProjects((current) =>
+      current.map((item) =>
+        item.id === project.id
+          ? {
+              ...item,
+              openIssues: item.openIssues + (subtask.status === "Done" ? 0 : 1),
+              lastUpdated: "Updated just now",
+              updatedAt: Date.now(),
+            }
+          : item,
+      ),
+    );
+    setNotice(`Created subtask ${subtask.key} under ${parentIssue.key}`);
+    return subtask;
+  };
+
   const createProject = (name: string, key: string, template: ProjectTemplate): Project => {
     const project: Project = {
       id: `project-${Date.now()}`,
@@ -264,6 +326,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         moveIssue,
         deleteIssue,
         addIssue,
+        addSubtask,
         createProject,
         toggleFavorite,
         createSprint,

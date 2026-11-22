@@ -45,7 +45,7 @@ const menuItems: { label: string; icon: ReactNode; target: WorkspaceView | "Proj
   { label: "Sales & billing", icon: <WalletCards size={15} />, target: "Sales & Billing" },
   { label: "Manager insights", icon: <Activity size={15} />, target: "Manager Insights" },
   { label: "Company brief", icon: <FileCode2 size={15} />, target: "Project Brief" },
-  { label: "AI integrations", icon: <Bot size={15} />, target: "MCP & AI Integration" },
+  { label: "Agent & MCP access", icon: <Bot size={15} />, target: "MCP & AI Integration" },
   { label: "Team & seats", icon: <Users size={15} />, target: "Team & Seat-Day Billing" },
 ];
 
@@ -200,6 +200,18 @@ export function WorkrailTopbar({
                   <small>thanet@northstar.studio</small>
                 </div>
                 <div className="home-menu-divider" />
+                <button
+                  type="button"
+                  className="home-menu-link"
+                  role="menuitem"
+                  onClick={() => {
+                    setAccountOpen(false);
+                    onNavigate("MCP & AI Integration");
+                  }}
+                >
+                  <Bot size={15} />
+                  <span>Agent &amp; MCP access</span>
+                </button>
                 <Link to="/login" className="home-menu-link" role="menuitem" onClick={() => setAccountOpen(false)}>
                   <UserRound size={15} />
                   <span>Sign in</span>

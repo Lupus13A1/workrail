@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from "react";
+import { useI18n } from "@/lib/i18n";
 import {
   AlignLeft,
   ArrowUpRight,
@@ -29,6 +30,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { SectionHeading } from "@/components/workspace/BoardViews";
 
 export function BriefView({ onCopy }: { onCopy: (text: string) => void }) {
+  const { t } = useI18n();
   const [markdown, setMarkdown] = useState(
     "# Storefront refresh\n\nA clear, reliable shopping experience for every customer.\n\n## Workflow rules\n| Status | Definition |\n| --- | --- |\n| To Do | Prioritized and ready to start |\n| In Progress | Actively being worked on |\n| In Review | Ready for teammate review |\n| Testing (UAT) | Awaiting customer acceptance |\n| Done | Verified and released |\n\n## QA hand-off\n- Share the PR and test notes before moving to Testing (UAT).\n- Mention the QA team when handing work off.\n- Keep customer information private.",
   );
@@ -37,12 +39,12 @@ export function BriefView({ onCopy }: { onCopy: (text: string) => void }) {
   return (
     <div className="subpage">
       <SectionHeading
-        eyebrow="PROJECT DOCUMENTATION"
-        title="Project brief"
-        description="A shared source of truth for your team and connected AI agents."
+        eyebrow={t.subpages.brief.eyebrow}
+        title={t.subpages.brief.title}
+        description={t.subpages.brief.description}
         action={
           <Button size="sm" onClick={() => onCopy(markdown)}>
-            <FileCode2 size={15} /> Copy .md
+            <FileCode2 size={15} /> {t.subpages.brief.copyMd}
           </Button>
         }
       />
@@ -54,14 +56,14 @@ export function BriefView({ onCopy }: { onCopy: (text: string) => void }) {
       <div className="brief-editor-top">
         <div className="segmented">
           <span className="segment-active">
-            <AlignLeft size={14} /> Edit .md
+            <AlignLeft size={14} /> {t.subpages.brief.editMd}
           </span>
           <span>
-            <FileText size={14} /> Preview
+            <FileText size={14} /> {t.subpages.brief.preview}
           </span>
         </div>
         <span className="saved-indicator">
-          <span className="live-dot" /> Saved just now
+          <span className="live-dot" /> {t.subpages.brief.saved}
         </span>
       </div>
       <div className="snippet-buttons">
@@ -74,7 +76,7 @@ export function BriefView({ onCopy }: { onCopy: (text: string) => void }) {
             )
           }
         >
-          + Insert status table
+          {t.subpages.brief.insertStatusTable}
         </Button>
         <Button
           size="sm"
@@ -85,7 +87,7 @@ export function BriefView({ onCopy }: { onCopy: (text: string) => void }) {
             )
           }
         >
-          + Insert QA hand-off rules
+          {t.subpages.brief.insertQaRules}
         </Button>
       </div>
       <Textarea
@@ -100,40 +102,46 @@ export function BriefView({ onCopy }: { onCopy: (text: string) => void }) {
 }
 
 export function SalesView({ onNotice }: { onNotice: (message: string) => void }) {
+  const { t } = useI18n();
   const [documentType, setDocumentType] = useState("Quotation");
   const deals = [
     { company: "Fern & Field Co.", project: "Storefront refresh", value: "฿480,000", paid: "2 / 3", stage: "Contract active", color: "avatar-mint", progress: 67 },
     { company: "Morrow Studio", project: "Client portal", value: "฿265,000", paid: "1 / 3", stage: "Proposal sent", color: "avatar-coral", progress: 33 },
     { company: "Sunday Supply", project: "Mobile app v2", value: "฿720,000", paid: "0 / 4", stage: "Draft quotation", color: "avatar-sky", progress: 8 },
   ];
+  const docTypes = [
+    { key: "Quotation", label: t.subpages.sales.quotation },
+    { key: "Billing note", label: t.subpages.sales.billingNote },
+    { key: "Receipt", label: t.subpages.sales.receipt },
+  ];
 
   return (
     <div className="subpage">
       <SectionHeading
-        eyebrow="COMMERCIAL WORKSPACE"
-        title="Sales & billing"
-        description="Keep every client deal and delivery milestone in view."
+        eyebrow={t.subpages.sales.eyebrow}
+        title={t.subpages.sales.title}
+        description={t.subpages.sales.description}
         action={
           <Button size="sm" onClick={() => onNotice("New client deal started")}>
-            <Plus size={15} /> New deal
+            <Plus size={15} /> {t.subpages.sales.newDeal}
           </Button>
         }
       />
       <div className="sales-summary">
         <div>
-          <small>ACTIVE CONTRACT VALUE</small>
+          <small>{t.subpages.sales.activeContractValue}</small>
           <strong>฿1,465,000</strong>
           <span>
             <ArrowUpRight size={14} /> 12% this quarter
           </span>
         </div>
         <div>
-          <small>OUTSTANDING PAYMENTS</small>
+          <small>{t.subpages.sales.outstandingPayments}</small>
           <strong>฿460,000</strong>
           <span>Across 4 milestones</span>
         </div>
         <div>
-          <small>ACTIVE CLIENTS</small>
+          <small>{t.subpages.sales.activeClients}</small>
           <strong>08</strong>
           <span>3 deals in progress</span>
         </div>
@@ -141,9 +149,9 @@ export function SalesView({ onNotice }: { onNotice: (message: string) => void })
       <div className="sales-content">
         <div className="deal-list">
           <div className="deal-list-heading">
-            <h3>Active deals</h3>
+            <h3>{t.subpages.sales.activeDeals}</h3>
             <Button variant="ghost" size="sm">
-              <Filter size={14} /> Filter
+              <Filter size={14} /> {t.common.filter}
             </Button>
           </div>
           {deals.map((deal) => (
@@ -178,7 +186,7 @@ export function SalesView({ onNotice }: { onNotice: (message: string) => void })
         <div className="document-preview">
           <div className="preview-header">
             <div>
-              <span className="eyebrow">DOCUMENT PREVIEW</span>
+              <span className="eyebrow">{t.subpages.sales.docPreview}</span>
               <h3>Fern & Field Co.</h3>
             </div>
             <Button size="icon" variant="ghost" title="More document actions" onClick={() => onNotice("Document options")}>
@@ -231,10 +239,10 @@ export function SalesView({ onNotice }: { onNotice: (message: string) => void })
           </div>
           <div className="preview-actions">
             <Button variant="outline" onClick={() => window.print()}>
-              <Download size={14} /> Download PDF
+              <Download size={14} /> {t.subpages.sales.downloadPdf}
             </Button>
             <Button onClick={() => onNotice(`${documentType} marked as sent`)}>
-              <Send size={14} /> Mark as sent
+              <Send size={14} /> {t.subpages.sales.markAsSent}
             </Button>
           </div>
         </div>
@@ -244,14 +252,15 @@ export function SalesView({ onNotice }: { onNotice: (message: string) => void })
 }
 
 export function InsightsView({ issues, onOpen }: { issues: Issue[]; onOpen: (id: string) => void }) {
+  const { t } = useI18n();
   const done = issues.filter((issue) => issue.status === "Done").length;
 
   return (
     <div className="subpage">
       <SectionHeading
-        eyebrow="TEAM PERFORMANCE"
-        title="Manager insights"
-        description="A clear view of the work moving through your team this week."
+        eyebrow={t.subpages.insights.eyebrow}
+        title={t.subpages.insights.title}
+        description={t.subpages.insights.description}
         action={
           <Button variant="outline" size="sm">
             <CalendarDays size={14} /> This week <ChevronDown size={13} />
@@ -263,7 +272,7 @@ export function InsightsView({ issues, onOpen }: { issues: Issue[]; onOpen: (id:
           <Sparkles size={18} />
         </div>
         <div>
-          <span>WEEKLY SUMMARY · GENERATED TODAY</span>
+          <span>{t.subpages.insights.weeklySummary}</span>
           <p>
             Your team shipped {done} updates this week. Checkout improvements are moving steadily, while two reviews are ready for a QA hand-off.
           </p>
@@ -273,22 +282,22 @@ export function InsightsView({ issues, onOpen }: { issues: Issue[]; onOpen: (id:
         </Button>
       </div>
       <div className="metric-grid">
-        <MetricCard label="AVERAGE CYCLE TIME" value="3.2" unit="days" trend="↓ 0.6 days" trendText="vs. last week" icon={<Clock3 size={18} />} />
+        <MetricCard label={t.subpages.insights.avgCycleTime} value="3.2" unit="days" trend="↓ 0.6 days" trendText="vs. last week" icon={<Clock3 size={18} />} />
         <MetricCard
-          label="ISSUES COMPLETED"
+          label={t.subpages.insights.issuesCompleted}
           value={String(done).padStart(2, "0")}
           unit="this week"
           trend="↑ 18%"
           trendText="vs. last week"
           icon={<CheckCheck size={18} />}
         />
-        <MetricCard label="ACTIVE IN REVIEW" value="02" unit="issues" trend="1 ready for QA" trendText="" icon={<Layers3 size={18} />} />
+        <MetricCard label={t.subpages.insights.activeInReview} value="02" unit="issues" trend="1 ready for QA" trendText="" icon={<Layers3 size={18} />} />
       </div>
       <div className="charts-grid">
         <div className="chart-panel">
           <div className="chart-heading">
             <div>
-              <span className="eyebrow">THROUGHPUT</span>
+              <span className="eyebrow">{t.subpages.insights.throughput}</span>
               <h3>Work completed</h3>
             </div>
             <span className="chart-legend">
@@ -315,7 +324,7 @@ export function InsightsView({ issues, onOpen }: { issues: Issue[]; onOpen: (id:
           </div>
         </div>
         <div className="chart-panel cycle-panel">
-          <span className="eyebrow">WORK IN PROGRESS</span>
+          <span className="eyebrow">{t.subpages.insights.workInProgress}</span>
           <h3>Flow by status</h3>
           {columns.slice(0, 4).map((column) => (
             <div className="flow-line" key={column}>
@@ -332,7 +341,7 @@ export function InsightsView({ issues, onOpen }: { issues: Issue[]; onOpen: (id:
       <div className="flagged-panel">
         <div className="deal-list-heading">
           <div>
-            <span className="eyebrow">NEEDS ATTENTION</span>
+            <span className="eyebrow">{t.subpages.insights.needsAttention}</span>
             <h3>Review & QA hand-off</h3>
           </div>
           <span className="soft-pill warning-pill">2 flagged</span>
@@ -525,6 +534,7 @@ const MCP_TOOLS: ToolItem[] = [
 const CORE_TOOLS_KB = 92; // Base core issues/projects tools so 92 + 112 = 204 KB full
 
 export function IntegrationView({ onCopy }: { onCopy: (text: string, message?: string) => void }) {
+  const { t } = useI18n();
   const [agents, setAgents] = useState<{ id: string; name: string; role: string; paused: boolean }[]>([]);
   const [tokens, setTokens] = useState<{ id: string; name: string; role: string; expiry: string; preview: string }[]>([]);
   const [tokenName, setTokenName] = useState("Claude Code");
@@ -666,7 +676,7 @@ export function IntegrationView({ onCopy }: { onCopy: (text: string, message?: s
       <div className="agent-mcp-container">
         <header className="agent-mcp-header">
           <h1>Agent &amp; MCP access</h1>
-          <p>Tokens are tied to you and to THANET CHANKHUA — an agent can do what you can, no more.</p>
+          <p>{t.subpages.mcp.desc}</p>
         </header>
 
         <div className="agent-mcp-grid">
@@ -674,7 +684,7 @@ export function IntegrationView({ onCopy }: { onCopy: (text: string, message?: s
           <div className="agent-mcp-col">
             {/* MY AGENTS CARD */}
             <section className="am-card">
-              <span className="am-card-eyebrow">MY AGENTS</span>
+              <span className="am-card-eyebrow">{t.subpages.mcp.myAgents}</span>
               <p className="am-card-desc">
                 An agent account is a named AI agent of your company that you own: it works with your rights, keeps a run log and has a pause button — on every plan, and it never takes a seat.
               </p>
@@ -684,7 +694,7 @@ export function IntegrationView({ onCopy }: { onCopy: (text: string, message?: s
 
               <div className="am-btn-row">
                 <button type="button" className="am-lime-btn" onClick={handleCreateAgent}>
-                  <Plus size={15} /> Create agent
+                  <Plus size={15} /> {t.subpages.mcp.createAgent}
                 </button>
                 <button
                   type="button"
@@ -696,7 +706,7 @@ export function IntegrationView({ onCopy }: { onCopy: (text: string, message?: s
               </div>
 
               <div className="am-limit-bar">
-                <span className="am-limit-label">COMPANY AGENT LIMIT</span>
+                <span className="am-limit-label">{t.subpages.mcp.companyLimit}</span>
                 <span className="am-beta-pill">Beta</span>
                 <strong>{agents.length} of 10 used</strong>
               </div>
@@ -736,7 +746,7 @@ export function IntegrationView({ onCopy }: { onCopy: (text: string, message?: s
             {/* PERSONAL ACCESS TOKENS CARD */}
             <section className="am-card">
               <div className="am-card-head-row">
-                <span className="am-card-eyebrow">PERSONAL ACCESS TOKENS</span>
+                <span className="am-card-eyebrow">{t.subpages.mcp.personalTokens}</span>
                 <span className="am-scope-pill">✓ scopes = same as you (user parity)</span>
               </div>
 
@@ -769,7 +779,7 @@ export function IntegrationView({ onCopy }: { onCopy: (text: string, message?: s
                   <option value="No expiry">No expiry</option>
                 </select>
                 <button type="button" className="am-lime-btn" onClick={handleCreateToken}>
-                  <Plus size={15} /> New token
+                  <Plus size={15} /> {t.subpages.mcp.newToken}
                 </button>
               </div>
 
@@ -1012,7 +1022,7 @@ export function IntegrationView({ onCopy }: { onCopy: (text: string, message?: s
             {/* TOOL SET — SAVE TOKENS CARD */}
             <section className="am-card">
               <div className="am-card-head-row">
-                <h2 className="am-card-title">Tool set — save tokens</h2>
+                <h2 className="am-card-title">{t.subpages.mcp.toolSet}</h2>
                 <span className="am-neutral-pill">?tools=</span>
               </div>
               <p className="am-card-desc">
@@ -1088,6 +1098,7 @@ export function IntegrationView({ onCopy }: { onCopy: (text: string, message?: s
 }
 
 export function TeamView({ onNotice }: { onNotice: (message: string) => void }) {
+  const { t } = useI18n();
   const [activePeople, setActivePeople] = useState([true, true, true, false]);
   const activeCount = activePeople.filter(Boolean).length;
   const seats = getBillableHumanSeats(activeCount);
@@ -1106,9 +1117,9 @@ export function TeamView({ onNotice }: { onNotice: (message: string) => void }) 
   return (
     <div className="subpage">
       <SectionHeading
-        eyebrow="WORKSPACE ADMINISTRATION"
-        title="Team & seat-day billing"
-        description="Simple pricing, clear usage, no cost for your AI agents."
+        eyebrow={t.subpages.team.eyebrow}
+        title={t.subpages.team.title}
+        description={t.subpages.team.description}
         action={
           <Button size="sm" variant="outline" onClick={() => onNotice("Invite link copied")}>
             <Plus size={15} /> Invite member
@@ -1127,7 +1138,7 @@ export function TeamView({ onNotice }: { onNotice: (message: string) => void }) 
       </div>
       <div className="billing-cards">
         <div className="billing-card">
-          <span>ACTIVE HUMAN SEATS</span>
+          <span>{t.subpages.team.activeTeammates}</span>
           <strong>
             {activeCount} <small>seats</small>
           </strong>
@@ -1139,7 +1150,7 @@ export function TeamView({ onNotice }: { onNotice: (message: string) => void }) 
           </div>
         </div>
         <div className="billing-card">
-          <span>CONNECTED AI AGENTS</span>
+          <span>{t.subpages.team.connectedAgents}</span>
           <strong>
             4 <small>agents</small>
           </strong>
@@ -1164,7 +1175,7 @@ export function TeamView({ onNotice }: { onNotice: (message: string) => void }) 
           </div>
         </div>
         <div className="billing-card accrued-card">
-          <span>THIS MONTH · ACCRUED SEAT-DAYS</span>
+          <span>{t.subpages.team.totalSeatDays}</span>
           <strong>
             {days} <small>billable days</small>
           </strong>

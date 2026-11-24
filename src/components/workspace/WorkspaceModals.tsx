@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
+import { useI18n } from "@/lib/i18n";
 import {
   Activity,
   AlertTriangle,
@@ -64,6 +65,7 @@ export function GlobalSearchModal({
   onOpenIssue: (id: string) => void;
   onNavigate: (target: WorkspaceView) => void;
 }) {
+  const { t } = useI18n();
   const [query, setQuery] = useState("");
 
   useEffect(() => {
@@ -105,7 +107,7 @@ export function GlobalSearchModal({
           <Input
             autoFocus
             aria-label="Search issues, projects, and pages"
-            placeholder="Search issues, projects, and pages…"
+            placeholder={t.modals.searchPlaceholder}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
           />
@@ -114,7 +116,7 @@ export function GlobalSearchModal({
         <div className="global-search-results">
           {matchingProjects.length > 0 && (
             <div>
-              <span className="search-group-label">PROJECTS</span>
+              <span className="search-group-label">{t.modals.searchSectionProjects}</span>
               {matchingProjects.map((project) => (
                 <button key={project.id} onClick={() => onOpenProject(project)}>
                   <span className={`project-symbol ${project.color}`}>{project.name.slice(0, 1)}</span>
@@ -131,7 +133,7 @@ export function GlobalSearchModal({
           )}
           {matchingIssues.length > 0 && (
             <div>
-              <span className="search-group-label">ISSUES</span>
+              <span className="search-group-label">{t.modals.searchSectionIssues}</span>
               {matchingIssues.map((issue) => (
                 <button key={issue.id} onClick={() => onOpenIssue(issue.id)}>
                   <span className={`type-icon type-${issue.type.toLowerCase()}`}>
@@ -150,7 +152,7 @@ export function GlobalSearchModal({
           )}
           {pages.length > 0 && (
             <div>
-              <span className="search-group-label">PAGES</span>
+              <span className="search-group-label">{t.modals.searchSectionPages}</span>
               {pages.map((page) => (
                 <button key={page.title} onClick={() => onNavigate(page.target)}>
                   {page.icon}
@@ -165,7 +167,7 @@ export function GlobalSearchModal({
           {matchingProjects.length + matchingIssues.length + pages.length === 0 && (
             <div className="global-search-empty">
               <Search size={18} />
-              <span>No matching results</span>
+              <span>{t.modals.noResults}</span>
             </div>
           )}
         </div>
@@ -203,6 +205,7 @@ export function CreateIssueModal({
   onClose: () => void;
   onCreate: (data: FormData) => void;
 }) {
+  const { t, language } = useI18n();
   const initialStatus = projectColumns[1] ?? projectColumns[0] ?? "To Do";
   const [issueType, setIssueType] = useState<IssueType>("Task");
   const [priority, setPriority] = useState<IssuePriority>("Medium");
@@ -215,7 +218,14 @@ export function CreateIssueModal({
         if (event.target === event.currentTarget) onClose();
       }}
     >
-      <form className="create-modal create-issue-rich" action={onCreate}>
+      <form
+        className="create-modal create-issue-rich"
+        onSubmit={(event) => {
+          event.preventDefault();
+          const formData = new FormData(event.currentTarget);
+          onCreate(formData);
+        }}
+      >
         <input type="hidden" name="type" value={issueType} />
         <input type="hidden" name="priority" value={priority} />
         <div className="modal-header">
@@ -223,7 +233,7 @@ export function CreateIssueModal({
             <span className="eyebrow">
               {projectKey} · CREATE_ISSUE · {projectName.toUpperCase()}
             </span>
-            <h2>New issue</h2>
+            <h2>{t.board.newIssue}</h2>
           </div>
           <Button size="icon" variant="ghost" type="button" title="Close" onClick={onClose}>
             <X size={18} />
@@ -231,7 +241,7 @@ export function CreateIssueModal({
         </div>
 
         <div className="ci-section">
-          <span className="ci-label">Type</span>
+          <span className="ci-label">{t.modals.issueType}</span>
           <div className="ci-type-bar" role="radiogroup" aria-label="Issue type">
             {(["Epic", "Feature", "Task", "Subtask", "Bug"] as IssueType[]).map((item) => (
               <button
@@ -252,12 +262,12 @@ export function CreateIssueModal({
         </div>
 
         <label className="ci-section">
-          <span className="ci-label">Title</span>
-          <input name="title" className="cp-input" autoFocus placeholder="What needs to get done?" required />
+          <span className="ci-label">{t.modals.issueTitle}</span>
+          <input name="title" className="cp-input" autoFocus placeholder={t.modals.issueTitle} required />
         </label>
 
         <div className="ci-section">
-          <span className="ci-label">Priority</span>
+          <span className="ci-label">{t.modals.issuePriority}</span>
           <div className="ci-priority-row" role="radiogroup" aria-label="Priority">
             {(["Highest", "High", "Medium", "Low", "Lowest"] as IssuePriority[]).map((item) => (
               <button
@@ -320,7 +330,7 @@ export function CreateIssueModal({
         </label>
 
         <div className="ci-section">
-          <span className="ci-label">Description</span>
+          <span className="ci-label">{t.modals.issueDescription}</span>
           <RichTextEditor
             name="description"
             value={description}
@@ -366,6 +376,7 @@ export function SprintsModal({
   onOpenSprintIssues: () => void;
   onRequestStartSprint: (sprint: SprintItem) => void;
 }) {
+  const { t, language } = useI18n();
   const [name, setName] = useState(`Sprint ${sprints.length + 1}`);
   const [goal, setGoal] = useState("");
   const [start, setStart] = useState("2026-12-01");
@@ -384,8 +395,8 @@ export function SprintsModal({
       <section className="create-project-modal sprints-modal" role="dialog" aria-modal="true" aria-labelledby="sprints-modal-title">
         <div className="create-project-head">
           <div>
-            <span className="eyebrow">{projectKey} · PROJECT ADMIN</span>
-            <h2 id="sprints-modal-title">Sprints</h2>
+            <span className="eyebrow">{projectKey} · {language === "th" ? "การจัดการโปรเจกต์" : "PROJECT ADMIN"}</span>
+            <h2 id="sprints-modal-title">{language === "th" ? "ตั้งค่าโปรเจกต์ & สปรินต์" : "Project Settings & Sprints"}</h2>
           </div>
           <Button type="button" variant="ghost" size="icon" title="Close" onClick={onClose}>
             <X size={18} />
@@ -437,7 +448,7 @@ export function SprintsModal({
               setReviewing(true);
             }}
           >
-            <span className="eyebrow">NEW SPRINT</span>
+            <span className="eyebrow">{t.board.newSprint}</span>
             <div className="form-grid">
               <label className="form-label">
                 Name
@@ -520,6 +531,7 @@ export function StartSprintModal({
   onClose: () => void;
   onConfirmStart: (updates: { name: string; goal: string; start: string; end: string }) => void;
 }) {
+  const { t, language } = useI18n();
   const [name, setName] = useState(sprint.name);
   const [duration, setDuration] = useState("2 weeks");
   const [start, setStart] = useState(sprint.start);
@@ -564,7 +576,7 @@ export function StartSprintModal({
             <span className="eyebrow">
               SPRINT OVERVIEW · {sprint.code} · {projectKey}
             </span>
-            <h2 id="start-sprint-title">Start sprint</h2>
+            <h2 id="start-sprint-title">{t.board.startSprint}</h2>
           </div>
           <Button type="button" variant="ghost" size="icon" title="Close" onClick={onClose}>
             <X size={18} />
@@ -699,6 +711,7 @@ export function IssueDrawer({
   onUpdateSubtask?: (subtaskId: string, changes: Partial<Issue>) => void;
   onDeleteSubtask?: (subtaskId: string, key: string) => void;
 }) {
+  const { t, language } = useI18n();
   const [viewMode, setViewMode] = useState<ViewMode>("rendered");
   const [expanded, setExpanded] = useState(false);
   const [watching, setWatching] = useState(false);
@@ -739,7 +752,7 @@ export function IssueDrawer({
   const submitComment = () => {
     if (!comment.trim()) return;
     const text = comment.trim();
-    setPostedComments((current) => [...current, { author: "Thanet Chankhua", initials: "TC", text, time: "Just now" }]);
+    setPostedComments((current) => [...current, { author: "Kittitee Sitthisom", initials: "KS", text, time: "Just now" }]);
     onChange({ comments: issue.comments + 1 });
     setHistory((current) => [{ text: `commented: "${text.slice(0, 40)}"`, time: "Just now" }, ...current]);
     setComment("");
@@ -906,7 +919,7 @@ export function IssueDrawer({
                 <>
                   <div className="description-heading">
                     <h3>
-                      <FileCode2 size={15} /> Description
+                      <FileCode2 size={15} /> {t.modals.description}
                     </h3>
                     {!editingDescription && (
                       <Button
@@ -987,7 +1000,7 @@ export function IssueDrawer({
             <section className="cu-subtasks-section">
               <div className="cu-subtasks-header">
                 <div className="cu-subtasks-title-group">
-                  <h3>Subtasks</h3>
+                  <h3>{t.modals.subtasks}</h3>
                   <span className="soft-pill">
                     {doneSubtasksCount}/{subTasks.length}
                   </span>
@@ -1222,7 +1235,7 @@ export function IssueDrawer({
 
             <div className="working-on-bar">
               <div className="working-on-copy">
-                <strong>Working on</strong>
+                <strong>{t.modals.workingOn}</strong>
                 {editingWorkingOn ? (
                   <input
                     className="cp-input working-on-input"
@@ -1274,7 +1287,7 @@ export function IssueDrawer({
             <section className="drawer-attachments-section">
               <div className="drawer-section-title">
                 <Paperclip size={15} />
-                <h3>Attachments</h3>
+                <h3>{t.modals.attachments}</h3>
                 <span className="soft-pill">{issue.attachments + attachmentNames.length}</span>
               </div>
               <div className="attachments-dropzone">
@@ -1308,7 +1321,7 @@ export function IssueDrawer({
             <section className="drawer-comments-section">
               <div className="drawer-section-title">
                 <MessageSquare size={15} />
-                <h3>Comments</h3>
+                <h3>{t.modals.comments}</h3>
                 <span className="soft-pill">{issue.comments + postedComments.length}</span>
               </div>
               {postedComments.length > 0 && (
@@ -1327,7 +1340,7 @@ export function IssueDrawer({
                 </div>
               )}
               <div className="comment-composer rich-comment-composer">
-                <span className="avatar avatar-mint">TC</span>
+                <span className="avatar avatar-mint">KS</span>
                 <div className="comment-rich-box">
                   <RichTextEditor
                     ariaLabel="Write a comment"
@@ -1512,10 +1525,10 @@ export function IssueDrawer({
                 <div className="fm-history-list">
                   {history.map((entry, index) => (
                     <div key={index} className="fm-history-item">
-                      <span className="avatar avatar-mint">TC</span>
+                      <span className="avatar avatar-mint">KS</span>
                       <div>
                         <p>
-                          <strong>THANET CHANKHUA</strong> {entry.text}
+                          <strong>KITTITEE SITTHISOM</strong> {entry.text}
                         </p>
                         <small>{entry.time}</small>
                       </div>

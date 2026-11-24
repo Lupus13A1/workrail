@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { AlertCircle, ArrowLeft, Check, Loader2 } from "lucide-react";
 
+import { useI18n } from "@/lib/i18n";
 import { AuthHeader, AuthShell } from "@/components/auth/AuthShared";
 
 export const Route = createFileRoute("/forgot-password")({
@@ -19,6 +20,7 @@ function isValidEmail(value: string): boolean {
 }
 
 function ForgotPasswordPage() {
+  const { language, t } = useI18n();
   const [email, setEmail] = useState("");
   const [emailError, setEmailError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -29,11 +31,11 @@ function ForgotPasswordPage() {
     if (submitting || sent) return;
 
     if (!email.trim()) {
-      setEmailError("Email address is required.");
+      setEmailError(language === "th" ? "กรุณากรอกอีเมล" : "Email address is required.");
       return;
     }
     if (!isValidEmail(email)) {
-      setEmailError("Enter a valid email address.");
+      setEmailError(language === "th" ? "กรุณากรอกอีเมลที่ถูกต้อง" : "Enter a valid email address.");
       return;
     }
 
@@ -48,14 +50,14 @@ function ForgotPasswordPage() {
   return (
     <AuthShell>
       <AuthHeader
-        heading="Forgot your password?"
-        description="Enter your email address and we'll send you a password reset link."
+        heading={t.auth.forgotHeading}
+        description={t.auth.forgotDesc}
         headingId="forgot-heading"
       />
 
       <form className="auth-v2-form" onSubmit={handleSubmit} noValidate>
         <div className="auth-v2-field">
-          <label htmlFor="forgot-email">Email address</label>
+          <label htmlFor="forgot-email">{t.auth.email}</label>
           <input
             id="forgot-email"
             className={`auth-v2-input ${emailError ? "has-error" : ""}`}
@@ -82,19 +84,23 @@ function ForgotPasswordPage() {
         {sent && (
           <div className="auth-v2-banner-success" role="status">
             <Check size={15} />
-            <span>If an account exists with this email, you'll receive instructions to reset your password.</span>
+            <span>
+              {language === "th"
+                ? "หากมีบัญชีที่ตรงกับอีเมลนี้ คุณจะได้รับคำแนะนำในการรีเซ็ตรหัสผ่าน"
+                : "If an account exists with this email, you'll receive instructions to reset your password."}
+            </span>
           </div>
         )}
 
         <button type="submit" className="auth-v2-primary-btn" disabled={submitting || sent}>
           {submitting && <Loader2 size={16} className="auth-v2-spin" />}
-          <span>{submitting ? "Sending reset link..." : sent ? "Reset link sent" : "Send reset link"}</span>
+          <span>{submitting ? (language === "th" ? "กำลังส่งลิงก์..." : "Sending reset link...") : sent ? (language === "th" ? "ส่งลิงก์เรียบร้อยแล้ว" : "Reset link sent") : t.auth.sendResetLink}</span>
         </button>
       </form>
 
       <p className="auth-v2-footer-link">
         <Link to="/login" className="auth-v2-back-signin">
-          <ArrowLeft size={14} /> Back to Sign in
+          <ArrowLeft size={14} /> {t.auth.backToSignIn}
         </Link>
       </p>
     </AuthShell>

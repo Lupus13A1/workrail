@@ -1,7 +1,9 @@
-import { useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { AlertCircle, Check, Circle, Loader2 } from "lucide-react";
 
+import { useWorkspaceStore } from "@/lib/workspace-store";
+import { useI18n } from "@/lib/i18n";
 import { AuthHeader, AuthShell, GoogleAuthButton, PasswordInput, SegmentedAuthNav } from "@/components/auth/AuthShared";
 
 export const Route = createFileRoute("/register")({
@@ -20,6 +22,8 @@ function isValidEmail(value: string): boolean {
 
 function RegisterPage() {
   const navigate = useNavigate();
+  const { isAuthenticated, isAuthReady, login } = useWorkspaceStore();
+  const { language, t } = useI18n();
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
@@ -30,14 +34,36 @@ function RegisterPage() {
   const [submitting, setSubmitting] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
 
+  useEffect(() => {
+    if (isAuthReady && isAuthenticated) {
+      void navigate({ to: "/" });
+    }
+  }, [isAuthReady, isAuthenticated, navigate]);
+
   const passwordRules = useMemo(
     () => [
-      { id: "len", label: "At least 8 characters", met: password.length >= 8 },
-      { id: "upper", label: "At least one uppercase letter", met: /[A-Z]/.test(password) },
-      { id: "lower", label: "At least one lowercase letter", met: /[a-z]/.test(password) },
-      { id: "num", label: "At least one number", met: /[0-9]/.test(password) },
+      {
+        id: "len",
+        label: language === "th" ? "อย่างน้อย 8 ตัวอักษร" : "At least 8 characters",
+        met: password.length >= 8,
+      },
+      {
+        id: "upper",
+        label: language === "th" ? "มีตัวพิมพ์ใหญ่อย่างน้อย 1 ตัว" : "At least one uppercase letter",
+        met: /[A-Z]/.test(password),
+      },
+      {
+        id: "lower",
+        label: language === "th" ? "มีตัวพิมพ์เล็กอย่างน้อย 1 ตัว" : "At least one lowercase letter",
+        met: /[a-z]/.test(password),
+      },
+      {
+        id: "num",
+        label: language === "th" ? "มีตัวเลขอย่างน้อย 1 ตัว" : "At least one number",
+        met: /[0-9]/.test(password),
+      },
     ],
-    [password],
+    [password, language],
   );
 
   const firstError = touched.first && !firstName.trim() ? "First name is required." : "";
@@ -64,6 +90,7 @@ function RegisterPage() {
     setSubmitting(true);
     window.setTimeout(() => {
       setSubmitting(false);
+      login(email, `${firstName} ${lastName}`);
       void navigate({ to: "/" });
     }, 550);
   };
@@ -74,6 +101,7 @@ function RegisterPage() {
     setGoogleLoading(true);
     window.setTimeout(() => {
       setGoogleLoading(false);
+      login("kittitee@northstar.studio", "Kittitee Sitthisom");
       void navigate({ to: "/" });
     }, 550);
   };
@@ -81,8 +109,8 @@ function RegisterPage() {
   return (
     <AuthShell>
       <AuthHeader
-        heading="Create your account"
-        description="Get started with your own workspace and manage your projects in one place."
+        heading={t.auth.createAccount}
+        description={t.auth.registerDesc}
         headingId="register-heading"
       />
       <SegmentedAuthNav active="register" />
@@ -95,17 +123,17 @@ function RegisterPage() {
         )}
 
         <div className="auth-v2-section">
-          <h2 className="auth-v2-section-title">Personal information</h2>
+          <h2 className="auth-v2-section-title">{language === "th" ? "ข้อมูลส่วนตัว" : "Personal information"}</h2>
 
           <div className="auth-v2-name-grid">
             <div className="auth-v2-field">
-              <label htmlFor="reg-first-name">First name</label>
+              <label htmlFor="reg-first-name">{t.auth.firstName}</label>
               <input
                 id="reg-first-name"
                 className={`auth-v2-input ${firstError ? "has-error" : ""}`}
                 type="text"
                 autoComplete="given-name"
-                placeholder="First name"
+                placeholder={t.auth.firstName}
                 value={firstName}
                 disabled={submitting || googleLoading}
                 aria-invalid={Boolean(firstError)}
@@ -121,13 +149,13 @@ function RegisterPage() {
             </div>
 
             <div className="auth-v2-field">
-              <label htmlFor="reg-last-name">Last name</label>
+              <label htmlFor="reg-last-name">{t.auth.lastName}</label>
               <input
                 id="reg-last-name"
                 className={`auth-v2-input ${lastError ? "has-error" : ""}`}
                 type="text"
                 autoComplete="family-name"
-                placeholder="Last name"
+                placeholder={t.auth.lastName}
                 value={lastName}
                 disabled={submitting || googleLoading}
                 aria-invalid={Boolean(lastError)}
@@ -144,7 +172,7 @@ function RegisterPage() {
           </div>
 
           <div className="auth-v2-field">
-            <label htmlFor="reg-email">Email address</label>
+            <label htmlFor="reg-email">{t.auth.email}</label>
             <input
               id="reg-email"
               className={`auth-v2-input ${emailError ? "has-error" : ""}`}
@@ -167,8 +195,8 @@ function RegisterPage() {
 
           <PasswordInput
             id="reg-password"
-            label="Password"
-            placeholder="Create a password"
+            label={t.auth.password}
+            placeholder={language === "th" ? "กำหนดรหัสผ่านของคุณ" : "Create a password"}
             autoComplete="new-password"
             value={password}
             error={passwordError}
@@ -193,14 +221,19 @@ function RegisterPage() {
 
         <button type="submit" className="auth-v2-primary-btn" disabled={!isFormValid || submitting || googleLoading}>
           {submitting && <Loader2 size={16} className="auth-v2-spin" />}
-          <span>{submitting ? "Creating account..." : "Create account"}</span>
+          <span>{submitting ? (language === "th" ? "กำลังสร้างบัญชี..." : "Creating account...") : t.auth.createAccount}</span>
         </button>
       </form>
 
-      <GoogleAuthButton label="Sign up with Google" loading={googleLoading} disabled={submitting} onClick={handleGoogleSignUp} />
+      <GoogleAuthButton
+        label={language === "th" ? "สมัครด้วย Google" : "Sign up with Google"}
+        loading={googleLoading}
+        disabled={submitting}
+        onClick={handleGoogleSignUp}
+      />
 
       <p className="auth-v2-footer-link">
-        Already have an account? <Link to="/login">Sign in</Link>
+        {t.auth.hasAccount} <Link to="/login">{t.auth.login}</Link>
       </p>
 
       <p className="auth-v2-legal">

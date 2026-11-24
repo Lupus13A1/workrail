@@ -1,7 +1,9 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { AlertCircle, Loader2 } from "lucide-react";
 
+import { useWorkspaceStore } from "@/lib/workspace-store";
+import { useI18n } from "@/lib/i18n";
 import { AuthHeader, AuthShell, GoogleAuthButton, PasswordInput, SegmentedAuthNav } from "@/components/auth/AuthShared";
 
 export const Route = createFileRoute("/login")({
@@ -20,6 +22,8 @@ function isValidEmail(value: string): boolean {
 
 function LoginPage() {
   const navigate = useNavigate();
+  const { isAuthenticated, isAuthReady, login } = useWorkspaceStore();
+  const { language, t } = useI18n();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(true);
@@ -28,6 +32,14 @@ function LoginPage() {
   const [formError, setFormError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+
+  useEffect(() => {
+    if (isAuthReady && isAuthenticated) {
+      const params = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
+      const redirectPath = params?.get("redirect") || "/";
+      void navigate({ to: redirectPath });
+    }
+  }, [isAuthReady, isAuthenticated, navigate]);
 
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();
@@ -60,7 +72,10 @@ function LoginPage() {
     setSubmitting(true);
     window.setTimeout(() => {
       setSubmitting(false);
-      void navigate({ to: "/" });
+      login(email);
+      const params = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
+      const redirectPath = params?.get("redirect") || "/";
+      void navigate({ to: redirectPath });
     }, 550);
   };
 
@@ -70,13 +85,16 @@ function LoginPage() {
     setGoogleLoading(true);
     window.setTimeout(() => {
       setGoogleLoading(false);
-      void navigate({ to: "/" });
+      login("kittitee@northstar.studio", "Kittitee Sitthisom");
+      const params = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
+      const redirectPath = params?.get("redirect") || "/";
+      void navigate({ to: redirectPath });
     }, 550);
   };
 
   return (
     <AuthShell>
-      <AuthHeader heading="Welcome back" description="Sign in to continue to your workspace." headingId="login-heading" />
+      <AuthHeader heading={t.auth.welcomeBack} description={t.auth.signInDesc} headingId="login-heading" />
       <SegmentedAuthNav active="login" />
 
       <form className="auth-v2-form" onSubmit={handleSubmit} noValidate>
@@ -87,7 +105,7 @@ function LoginPage() {
         )}
 
         <div className="auth-v2-field">
-          <label htmlFor="login-email">Email address</label>
+          <label htmlFor="login-email">{t.auth.email}</label>
           <input
             id="login-email"
             className={`auth-v2-input ${emailError ? "has-error" : ""}`}
@@ -112,15 +130,15 @@ function LoginPage() {
 
         <PasswordInput
           id="login-password"
-          label="Password"
-          placeholder="Enter your password"
+          label={t.auth.password}
+          placeholder={language === "th" ? "กรอกรหัสผ่านของคุณ" : "Enter your password"}
           autoComplete="current-password"
           value={password}
           error={passwordError}
           disabled={submitting || googleLoading}
           rightAction={
             <Link to="/forgot-password" className="auth-v2-link">
-              Forgot password?
+              {t.auth.forgotPassword}
             </Link>
           }
           onChange={(next) => {
@@ -131,19 +149,19 @@ function LoginPage() {
 
         <label className="auth-v2-remember">
           <input type="checkbox" checked={rememberMe} onChange={(event) => setRememberMe(event.target.checked)} />
-          <span>Remember me</span>
+          <span>{t.auth.rememberMe}</span>
         </label>
 
         <button type="submit" className="auth-v2-primary-btn" disabled={submitting || googleLoading}>
           {submitting && <Loader2 size={16} className="auth-v2-spin" />}
-          <span>{submitting ? "Signing in..." : "Sign in"}</span>
+          <span>{submitting ? (language === "th" ? "กำลังเข้าสู่ระบบ..." : "Signing in...") : t.auth.login}</span>
         </button>
       </form>
 
-      <GoogleAuthButton label="Continue with Google" loading={googleLoading} disabled={submitting} onClick={handleGoogleSignIn} />
+      <GoogleAuthButton label={t.auth.googleSignIn} loading={googleLoading} disabled={submitting} onClick={handleGoogleSignIn} />
 
       <p className="auth-v2-footer-link">
-        Don't have an account? <Link to="/register">Create account</Link>
+        {t.auth.noAccount} <Link to="/register">{t.auth.createAccount}</Link>
       </p>
     </AuthShell>
   );

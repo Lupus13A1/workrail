@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 
 import { getBoardConfig, getNextIssueNumber, type Project, type ProjectTemplate } from "@/lib/project-dashboard";
 import {
@@ -24,7 +24,28 @@ export function getProjectSlug(project: Pick<Project, "id" | "name">): string {
 
 export type DropPosition = "before" | "after";
 
+export type Language = "en" | "th";
+
+export type AuthUser = {
+  name: string;
+  email: string;
+  initials: string;
+};
+
+export const DEFAULT_AUTH_USER: AuthUser = {
+  name: "Kittitee Sitthisom",
+  email: "kittitee@northstar.studio",
+  initials: "KS",
+};
+
 type WorkspaceContextValue = {
+  user: AuthUser | null;
+  isAuthenticated: boolean;
+  isAuthReady: boolean;
+  language: Language;
+  setLanguage: (lang: Language) => void;
+  login: (email: string, name?: string) => void;
+  logout: () => void;
   projects: Project[];
   projectIssues: Record<string, Issue[]>;
   projectSprints: Record<string, SprintItem[]>;
@@ -64,6 +85,110 @@ type WorkspaceContextValue = {
 const WorkspaceContext = createContext<WorkspaceContextValue | null>(null);
 
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      return localStorage.getItem("workrail_auth") === "true";
+    } catch {
+      return false;
+    }
+  });
+
+  const [user, setUser] = useState<AuthUser | null>(() => {
+    if (typeof window === "undefined") return null;
+    try {
+      const stored = localStorage.getItem("workrail_user");
+      if (stored) return JSON.parse(stored) as AuthUser;
+      if (localStorage.getItem("workrail_auth") === "true") return DEFAULT_AUTH_USER;
+      return null;
+    } catch {
+      return null;
+    }
+  });
+
+  const [isAuthReady, setIsAuthReady] = useState<boolean>(false);
+  const [language, setLanguageState] = useState<Language>(() => {
+    if (typeof window === "undefined") return "en";
+    try {
+      return (localStorage.getItem("workrail_lang") as Language) || "en";
+    } catch {
+      return "en";
+    }
+  });
+
+  const setLanguage = (next: Language) => {
+    setLanguageState(next);
+    try {
+      localStorage.setItem("workrail_lang", next);
+    } catch {}
+  };
+
+  useEffect(() => {
+    try {
+      const isAuth = localStorage.getItem("workrail_auth") === "true";
+      const storedUser = localStorage.getItem("workrail_user");
+      if (isAuth) {
+        setIsAuthenticated(true);
+        if (storedUser) {
+          setUser(JSON.parse(storedUser));
+        } else {
+          setUser(DEFAULT_AUTH_USER);
+        }
+      } else {
+        setIsAuthenticated(false);
+        setUser(null);
+      }
+    } catch {
+      setIsAuthenticated(false);
+      setUser(null);
+    } finally {
+      setIsAuthReady(true);
+    }
+  }, []);
+
+  const login = (email: string, name?: string) => {
+    let displayName = name?.trim();
+    if (!displayName) {
+      const localPart = email.split("@")[0] || "User";
+      displayName = localPart
+        .replace(/[._-]+/g, " ")
+        .split(" ")
+        .filter(Boolean)
+        .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+        .join(" ");
+    }
+    if (!displayName) displayName = "Kittitee Sitthisom";
+
+    const initials =
+      displayName
+        .split(/\s+/)
+        .map((w) => w.charAt(0).toUpperCase())
+        .slice(0, 2)
+        .join("") || "KS";
+
+    const newUser: AuthUser = {
+      name: displayName,
+      email: email.trim() || "kittitee@northstar.studio",
+      initials,
+    };
+
+    setIsAuthenticated(true);
+    setUser(newUser);
+    try {
+      localStorage.setItem("workrail_auth", "true");
+      localStorage.setItem("workrail_user", JSON.stringify(newUser));
+    } catch {}
+  };
+
+  const logout = () => {
+    setIsAuthenticated(false);
+    setUser(null);
+    try {
+      localStorage.removeItem("workrail_auth");
+      localStorage.removeItem("workrail_user");
+    } catch {}
+  };
+
   const [projects, setProjects] = useState<Project[]>(seedProjects);
   const [projectIssues, setProjectIssues] = useState<Record<string, Issue[]>>({ app: seedIssues });
   const [projectSprints, setProjectSprints] = useState<Record<string, SprintItem[]>>({});
@@ -332,6 +457,13 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   return (
     <WorkspaceContext.Provider
       value={{
+        user,
+        isAuthenticated,
+        isAuthReady,
+        language,
+        setLanguage,
+        login,
+        logout,
         projects,
         projectIssues,
         projectSprints,

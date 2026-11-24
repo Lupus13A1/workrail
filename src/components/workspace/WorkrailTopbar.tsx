@@ -20,6 +20,7 @@ import {
 
 import type { Project } from "@/lib/project-dashboard";
 import type { WorkspaceView } from "@/lib/workspace-data";
+import { useWorkspaceStore } from "@/lib/workspace-store";
 
 export function WorkrailMark({ size = 16 }: { size?: number }) {
   return (
@@ -49,6 +50,28 @@ const menuItems: { label: string; icon: ReactNode; target: WorkspaceView | "Proj
   { label: "Team & seats", icon: <Users size={15} />, target: "Team & Seat-Day Billing" },
 ];
 
+function getLocalizedMenuLabel(label: string, lang: "en" | "th"): string {
+  if (lang !== "th") return label;
+  switch (label) {
+    case "Projects":
+      return "โปรเจกต์";
+    case "My work":
+      return "งานของฉัน";
+    case "Sales & billing":
+      return "การขายและการเงิน";
+    case "Manager insights":
+      return "ข้อมูลเชิงลึก";
+    case "Company brief":
+      return "เอกสารสรุปบริษัท";
+    case "Agent & MCP access":
+      return "การเชื่อมต่อ Agent & MCP";
+    case "Team & seats":
+      return "ทีมและที่นั่ง";
+    default:
+      return label;
+  }
+}
+
 export function WorkrailTopbar({
   darkMode,
   currentLabel,
@@ -74,6 +97,7 @@ export function WorkrailTopbar({
   onProjects: () => void;
   onMyWork: () => void;
 }) {
+  const { user, logout, language, setLanguage } = useWorkspaceStore();
   const [menuOpen, setMenuOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
 
@@ -115,7 +139,7 @@ export function WorkrailTopbar({
             <span className="home-switcher-icon">
               <House size={13} />
             </span>
-            {currentLabel}
+            {getLocalizedMenuLabel(currentLabel, language)}
             <ChevronDown size={14} />
           </button>
           {menuOpen && (
@@ -130,11 +154,11 @@ export function WorkrailTopbar({
                 {menuItems.map((item) => (
                   <button key={item.label} role="menuitem" onClick={() => select(item.target)}>
                     {item.icon}
-                    <span>{item.label}</span>
+                    <span>{getLocalizedMenuLabel(item.label, language)}</span>
                   </button>
                 ))}
                 <div className="home-menu-divider" />
-                <span className="home-menu-label">PROJECTS</span>
+                <span className="home-menu-label">{language === "th" ? "โปรเจกต์" : "PROJECTS"}</span>
                 {projects.slice(0, 4).map((project) => (
                   <button
                     key={project.id}
@@ -157,22 +181,64 @@ export function WorkrailTopbar({
       <div className="home-topbar-right">
         <button className="home-global-search" onClick={onSearch}>
           <Search size={14} />
-          <span>Search issues, jump to…</span>
+          <span>{language === "th" ? "ค้นหา issues, ไปที่…" : "Search issues, jump to…"}</span>
           <kbd>Ctrl K</kbd>
         </button>
         <button
           className="home-icon-button"
-          title={darkMode ? "Switch to light theme" : "Switch to dark theme"}
+          title={
+            darkMode
+              ? language === "th"
+                ? "เปลี่ยนเป็นโหมดสว่าง"
+                : "Switch to light theme"
+              : language === "th"
+                ? "เปลี่ยนเป็นโหมดมืด"
+                : "Switch to dark theme"
+          }
           aria-pressed={darkMode}
           onClick={onToggleDark}
         >
           <Moon size={15} />
         </button>
-        <button className="home-icon-button home-help" title="Help center" onClick={() => onNotice("Help center opened")}>
+        <div className="home-lang" role="group" aria-label={language === "th" ? "เปลี่ยนภาษา" : "Switch language"}>
+          <button
+            type="button"
+            className={language === "th" ? "is-active" : ""}
+            onClick={() => {
+              setLanguage("th");
+              onNotice("เปลี่ยนเป็นภาษาไทยแล้ว");
+            }}
+            aria-pressed={language === "th"}
+            title="ภาษาไทย (TH)"
+          >
+            TH
+          </button>
+          <button
+            type="button"
+            className={language === "en" ? "is-active" : ""}
+            onClick={() => {
+              setLanguage("en");
+              onNotice("Switched to English");
+            }}
+            aria-pressed={language === "en"}
+            title="English (EN)"
+          >
+            EN
+          </button>
+        </div>
+        <button
+          className="home-icon-button home-help"
+          title={language === "th" ? "ศูนย์ช่วยเหลือ" : "Help center"}
+          onClick={() => onNotice(language === "th" ? "เปิดศูนย์ช่วยเหลือแล้ว" : "Help center opened")}
+        >
           <CircleHelp size={15} />
           <i />
         </button>
-        <button className="home-icon-button" title="Notifications" onClick={() => onNotice("You're all caught up")}>
+        <button
+          className="home-icon-button"
+          title={language === "th" ? "การแจ้งเตือน" : "Notifications"}
+          onClick={() => onNotice(language === "th" ? "ไม่มีการแจ้งเตือนใหม่" : "You're all caught up")}
+        >
           <Bell size={15} />
         </button>
         <div className="home-account-wrap">
@@ -184,7 +250,7 @@ export function WorkrailTopbar({
             aria-expanded={accountOpen}
             onClick={() => setAccountOpen(!accountOpen)}
           >
-            TC
+            {user?.initials ?? "KS"}
           </button>
           {accountOpen && (
             <>
@@ -196,8 +262,8 @@ export function WorkrailTopbar({
               />
               <div className="home-menu home-account-menu" role="menu">
                 <div className="home-account-info">
-                  <strong>Thanet Chankhua</strong>
-                  <small>thanet@northstar.studio</small>
+                  <strong>{user?.name ?? "Kittitee Sitthisom"}</strong>
+                  <small>{user?.email ?? "kittitee@northstar.studio"}</small>
                 </div>
                 <div className="home-menu-divider" />
                 <button
@@ -210,16 +276,21 @@ export function WorkrailTopbar({
                   }}
                 >
                   <Bot size={15} />
-                  <span>Agent &amp; MCP access</span>
+                  <span>{language === "th" ? "การเชื่อมต่อ Agent & MCP" : "Agent & MCP access"}</span>
                 </button>
-                <Link to="/login" className="home-menu-link" role="menuitem" onClick={() => setAccountOpen(false)}>
-                  <UserRound size={15} />
-                  <span>Sign in</span>
-                </Link>
-                <Link to="/register" className="home-menu-link" role="menuitem" onClick={() => setAccountOpen(false)}>
+                <button
+                  type="button"
+                  className="home-menu-link"
+                  role="menuitem"
+                  onClick={() => {
+                    setAccountOpen(false);
+                    logout();
+                    onNotice(language === "th" ? "ออกจากระบบแล้ว" : "Signed out of your workspace");
+                  }}
+                >
                   <LogOut size={15} />
-                  <span>Create account</span>
-                </Link>
+                  <span>{language === "th" ? "ออกจากระบบ" : "Log out"}</span>
+                </button>
               </div>
             </>
           )}

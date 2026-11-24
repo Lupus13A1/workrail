@@ -1,8 +1,9 @@
 import { useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
-import { AlertCircle, Eye, EyeOff, Loader2 } from "lucide-react";
+import { AlertCircle, Eye, EyeOff, Loader2, Moon } from "lucide-react";
 
 import { useWorkspaceStore } from "@/lib/workspace-store";
+import { useI18n } from "@/lib/i18n";
 import { WorkrailMark } from "@/components/workspace/WorkrailTopbar";
 
 export function GoogleIcon() {
@@ -29,10 +30,61 @@ export function GoogleIcon() {
 }
 
 export function AuthShell({ children }: { children: ReactNode }) {
-  const { darkMode } = useWorkspaceStore();
+  const { darkMode, setDarkMode } = useWorkspaceStore();
+  const { language, setLanguage } = useI18n();
 
   return (
     <div className={`workspace-shell auth-v2-shell ${darkMode ? "dark" : "light-mode"}`}>
+      <div
+        className="auth-v2-top-actions"
+        style={{
+          position: "fixed",
+          top: "16px",
+          right: "20px",
+          display: "flex",
+          alignItems: "center",
+          gap: "8px",
+          zIndex: 10,
+        }}
+      >
+        <button
+          type="button"
+          className="home-icon-button"
+          title={
+            darkMode
+              ? language === "th"
+                ? "เปลี่ยนเป็นโหมดสว่าง"
+                : "Switch to light theme"
+              : language === "th"
+                ? "เปลี่ยนเป็นโหมดมืด"
+                : "Switch to dark theme"
+          }
+          aria-pressed={darkMode}
+          onClick={() => setDarkMode(!darkMode)}
+        >
+          <Moon size={15} />
+        </button>
+        <div className="home-lang" role="group" aria-label={language === "th" ? "เปลี่ยนภาษา" : "Switch language"}>
+          <button
+            type="button"
+            className={language === "th" ? "is-active" : ""}
+            onClick={() => setLanguage("th")}
+            aria-pressed={language === "th"}
+            title="ภาษาไทย (TH)"
+          >
+            TH
+          </button>
+          <button
+            type="button"
+            className={language === "en" ? "is-active" : ""}
+            onClick={() => setLanguage("en")}
+            aria-pressed={language === "en"}
+            title="English (EN)"
+          >
+            EN
+          </button>
+        </div>
+      </div>
       <main className="auth-v2-main">
         <section className="auth-v2-card">{children}</section>
       </main>
@@ -66,13 +118,14 @@ export function AuthHeader({
 }
 
 export function SegmentedAuthNav({ active }: { active: "login" | "register" }) {
+  const { t } = useI18n();
   return (
     <nav className="auth-v2-segmented" aria-label="Authentication pages">
       <Link to="/login" className={active === "login" ? "is-active" : ""} aria-current={active === "login" ? "page" : undefined}>
-        Sign in
+        {t.auth.login}
       </Link>
       <Link to="/register" className={active === "register" ? "is-active" : ""} aria-current={active === "register" ? "page" : undefined}>
-        Register
+        {t.auth.register}
       </Link>
     </nav>
   );

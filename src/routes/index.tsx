@@ -4,8 +4,10 @@ import { Check, X } from "lucide-react";
 
 import type { Project } from "@/lib/project-dashboard";
 import { getProjectSlug, useWorkspaceStore } from "@/lib/workspace-store";
+import { useI18n } from "@/lib/i18n";
 import type { WorkspaceView } from "@/lib/workspace-data";
 import { Button } from "@/components/ui/button";
+import { AuthGuard } from "@/components/auth/AuthGuard";
 import { CreateProjectModal, ProjectsDashboard } from "@/components/workspace/ProjectsHome";
 import { WorkrailTopbar } from "@/components/workspace/WorkrailTopbar";
 import { GlobalSearchModal } from "@/components/workspace/WorkspaceModals";
@@ -28,12 +30,13 @@ export const Route = createFileRoute("/")({
 function HomeWorkspace() {
   const routerNavigate = useNavigate();
   const store = useWorkspaceStore();
+  const { t } = useI18n();
 
   const [myWorkOnly, setMyWorkOnly] = useState(false);
   const [subpage, setSubpage] = useState<WorkspaceView | null>(null);
   const [createProjectOpen, setCreateProjectOpen] = useState(false);
   const [globalSearchOpen, setGlobalSearchOpen] = useState(false);
-  const [greeting, setGreeting] = useState("Good morning");
+  const [greeting, setGreeting] = useState("");
 
   useEffect(() => {
     const onShortcut = (event: KeyboardEvent) => {
@@ -48,7 +51,15 @@ function HomeWorkspace() {
 
   useEffect(() => {
     const hour = new Date().getHours();
-    setGreeting(hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening");
+    const greetingText =
+      hour >= 5 && hour < 12
+        ? t.dashboard.goodMorning
+        : hour >= 12 && hour < 17
+          ? t.dashboard.goodAfternoon
+          : hour >= 17 && hour < 21
+            ? t.dashboard.goodEvening
+            : t.dashboard.goodNight;
+    setGreeting(greetingText);
     const params = new URLSearchParams(window.location.search);
     const viewParam = params.get("view") as WorkspaceView | null;
     if (viewParam) {
@@ -68,8 +79,9 @@ function HomeWorkspace() {
   const defaultIssues = store.getIssues("app");
 
   return (
-    <div className={`workspace-shell ${!subpage ? "home-mode" : ""} ${store.darkMode ? "dark" : "light-mode"}`}>
-      <main className="app-main">
+    <AuthGuard>
+      <div className={`workspace-shell ${!subpage ? "home-mode" : ""} ${store.darkMode ? "dark" : "light-mode"}`}>
+        <main className="app-main">
         <WorkrailTopbar
           darkMode={store.darkMode}
           currentLabel={subpage ?? (myWorkOnly ? "My work" : "Projects")}
@@ -164,5 +176,6 @@ function HomeWorkspace() {
         </div>
       )}
     </div>
+    </AuthGuard>
   );
 }

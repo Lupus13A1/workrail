@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 
 import { getProjectSlug, useWorkspaceStore } from "@/lib/workspace-store";
+import { useI18n } from "@/lib/i18n";
 import {
   people,
   peopleAvatars,
@@ -30,6 +31,7 @@ import {
   type WorkspaceView,
 } from "@/lib/workspace-data";
 import { Button } from "@/components/ui/button";
+import { AuthGuard } from "@/components/auth/AuthGuard";
 import { BoardView, PipelineView, SprintView } from "@/components/workspace/BoardViews";
 import { CreateProjectModal } from "@/components/workspace/ProjectsHome";
 import { WorkrailTopbar } from "@/components/workspace/WorkrailTopbar";
@@ -47,6 +49,7 @@ function ProjectWorkspacePage() {
   const { projectSlug } = Route.useParams();
   const routerNavigate = useNavigate();
   const store = useWorkspaceStore();
+  const { language, t } = useI18n();
 
   const activeProject = store.findProjectBySlug(projectSlug);
 
@@ -90,31 +93,33 @@ function ProjectWorkspacePage() {
 
   if (!activeProject) {
     return (
-      <div className={`workspace-shell ${store.darkMode ? "dark" : "light-mode"}`}>
-        <main className="app-main">
-          <WorkrailTopbar
-            darkMode={store.darkMode}
-            currentLabel="Projects"
-            projects={store.projects}
-            onToggleDark={() => store.setDarkMode(!store.darkMode)}
-            onSearch={() => setGlobalSearchOpen(true)}
-            onNotice={store.setNotice}
-            onNavigate={() => void routerNavigate({ to: "/" })}
-            onOpenProject={(project) => void routerNavigate({ to: "/project/$projectSlug", params: { projectSlug: getProjectSlug(project) } })}
-            onProjects={() => void routerNavigate({ to: "/" })}
-            onMyWork={() => void routerNavigate({ to: "/" })}
-          />
-          <div className="subpage">
-            <div className="projects-empty home-empty">
-              <h3>Project not found</h3>
-              <p>The project "{projectSlug}" does not exist in this workspace.</p>
-              <Button onClick={() => void routerNavigate({ to: "/" })}>
-                <ArrowLeft size={15} /> Back to projects
-              </Button>
+      <AuthGuard>
+        <div className={`workspace-shell ${store.darkMode ? "dark" : "light-mode"}`}>
+          <main className="app-main">
+            <WorkrailTopbar
+              darkMode={store.darkMode}
+              currentLabel="Projects"
+              projects={store.projects}
+              onToggleDark={() => store.setDarkMode(!store.darkMode)}
+              onSearch={() => setGlobalSearchOpen(true)}
+              onNotice={store.setNotice}
+              onNavigate={() => void routerNavigate({ to: "/" })}
+              onOpenProject={(project) => void routerNavigate({ to: "/project/$projectSlug", params: { projectSlug: getProjectSlug(project) } })}
+              onProjects={() => void routerNavigate({ to: "/" })}
+              onMyWork={() => void routerNavigate({ to: "/" })}
+            />
+            <div className="subpage">
+              <div className="projects-empty home-empty">
+                <h3>Project not found</h3>
+                <p>The project "{projectSlug}" does not exist in this workspace.</p>
+                <Button onClick={() => void routerNavigate({ to: "/" })}>
+                  <ArrowLeft size={15} /> Back to projects
+                </Button>
+              </div>
             </div>
-          </div>
-        </main>
-      </div>
+          </main>
+        </div>
+      </AuthGuard>
     );
   }
 
@@ -150,8 +155,9 @@ function ProjectWorkspacePage() {
   };
 
   return (
-    <div className={`workspace-shell ${store.darkMode ? "dark" : "light-mode"}`}>
-      <main className="app-main">
+    <AuthGuard>
+      <div className={`workspace-shell ${store.darkMode ? "dark" : "light-mode"}`}>
+        <main className="app-main">
         <WorkrailTopbar
           darkMode={store.darkMode}
           currentLabel={activeProject.name}
@@ -361,7 +367,15 @@ function ProjectWorkspacePage() {
                   onClick={() => setView(tab)}
                   className={`project-pill-tab ${view === tab ? "is-active" : ""}`}
                 >
-                  {tab === "Project Brief" ? "Project docs & brief" : tab}
+                  {tab === "Board"
+                    ? t.board.board
+                    : tab === "Backlog & Sprints"
+                      ? t.board.backlogSprints
+                      : tab === "Delivery Pipeline"
+                        ? t.board.deliveryPipeline
+                        : language === "th"
+                          ? "เอกสาร & สรุปงาน"
+                          : "Project docs & brief"}
                 </button>
               ))}
             </div>
@@ -393,7 +407,7 @@ function ProjectWorkspacePage() {
                     className="pill-control"
                     onClick={() => setFiltersOpen(!filtersOpen)}
                   >
-                    <Filter size={14} /> Filters{" "}
+                    <Filter size={14} /> {t.common.filter}{" "}
                     {Boolean(filterType || filterPriority || aiOnly) && (
                       <span className="filter-active-count">{[filterType, filterPriority, aiOnly].filter(Boolean).length}</span>
                     )}
@@ -404,7 +418,7 @@ function ProjectWorkspacePage() {
                       <button className="home-menu-backdrop" aria-label="Close filters" tabIndex={-1} onClick={() => setFiltersOpen(false)} />
                       <div className="filter-popover" role="dialog" aria-label="Board filters">
                         <div className="filter-popover-row">
-                          <span className="filter-popover-label">TYPE</span>
+                          <span className="filter-popover-label">{language === "th" ? "ประเภท" : "TYPE"}</span>
                           <div className="filter-chips">
                             {(["Epic", "Feature", "Task", "Subtask", "Bug"] as IssueType[]).map((item) => (
                               <button
@@ -416,13 +430,13 @@ function ProjectWorkspacePage() {
                                 <span className={`type-icon type-${item.toLowerCase()}`}>
                                   {item === "Bug" ? "◆" : item === "Feature" ? "✦" : item === "Epic" ? "⚡" : item === "Subtask" ? "↳" : "≡"}
                                 </span>
-                                {item.toLowerCase()}
+                                {t.board.types[item] ?? item.toLowerCase()}
                               </button>
                             ))}
                           </div>
                         </div>
                         <div className="filter-popover-row">
-                          <span className="filter-popover-label">PRIORITY</span>
+                          <span className="filter-popover-label">{language === "th" ? "ความสำคัญ" : "PRIORITY"}</span>
                           <div className="filter-chips">
                             {(["Highest", "High", "Medium", "Low", "Lowest"] as IssuePriority[]).map((item) => (
                               <button
@@ -431,16 +445,16 @@ function ProjectWorkspacePage() {
                                 className={`filter-chip ${filterPriority === item ? "is-active" : ""}`}
                                 onClick={() => setFilterPriority(filterPriority === item ? null : item)}
                               >
-                                {item}
+                                {t.board.priorities[item] ?? item}
                               </button>
                             ))}
                           </div>
                         </div>
                         <div className="filter-popover-row">
-                          <span className="filter-popover-label">AGENTS</span>
+                          <span className="filter-popover-label">{language === "th" ? "AI AGENTS" : "AGENTS"}</span>
                           <div className="filter-chips">
                             <button type="button" className={`filter-chip ${aiOnly ? "is-active" : ""}`} onClick={() => setAiOnly(!aiOnly)}>
-                              <Sparkles size={12} /> agent work
+                              <Sparkles size={12} /> {language === "th" ? "งาน AI" : "agent work"}
                             </button>
                             {(filterType || filterPriority || aiOnly || filterPerson !== "All teammates") && (
                               <button
@@ -453,7 +467,7 @@ function ProjectWorkspacePage() {
                                   setFilterPerson("All teammates");
                                 }}
                               >
-                                Clear all
+                                {language === "th" ? "ล้างทั้งหมด" : "Clear all"}
                               </button>
                             )}
                           </div>
@@ -464,24 +478,24 @@ function ProjectWorkspacePage() {
                 </div>
 
                 <Button size="sm" className="create-button" onClick={() => setNewIssueOpen(true)}>
-                  <Plus size={15} /> Create issue
+                  <Plus size={15} /> {language === "th" ? "สร้างงาน" : "Create issue"}
                 </Button>
 
                 <Button size="sm" variant="outline" className="pill-control" onClick={() => setSprintsOpen(true)}>
-                  <Settings2 size={14} /> Settings
+                  <Settings2 size={14} /> {language === "th" ? "ตั้งค่า" : "Settings"}
                 </Button>
 
                 <div className="board-layout-switch" role="group" aria-label="Board layout">
                   <button type="button" className={boardLayout === "columns" ? "is-active" : ""} onClick={() => setBoardLayout("columns")}>
-                    <Columns3 size={14} /> Columns
+                    <Columns3 size={14} /> {t.board.columns}
                   </button>
                   <button type="button" className={boardLayout === "list" ? "is-active" : ""} onClick={() => setBoardLayout("list")}>
-                    <List size={14} /> List
+                    <List size={14} /> {t.board.list}
                   </button>
                 </div>
 
                 <Button size="sm" variant={compactView ? "secondary" : "outline"} className="pill-control" onClick={() => setCompactView(!compactView)}>
-                  <Rows3 size={14} /> Compact view
+                  <Rows3 size={14} /> {t.board.compact}
                 </Button>
 
                 <Button
@@ -493,11 +507,11 @@ function ProjectWorkspacePage() {
                     setSelectedIds([]);
                   }}
                 >
-                  <CheckSquare size={14} /> Select
+                  <CheckSquare size={14} /> {t.board.select}
                 </Button>
 
                 <span className="board-kbd-hint">
-                  <kbd>drag</kbd> move / reorder cards
+                  <kbd>drag</kbd> {language === "th" ? "ลากเพื่อย้าย/จัดลำดับการ์ด" : "move / reorder cards"}
                 </span>
               </div>
             )}
@@ -717,5 +731,6 @@ function ProjectWorkspacePage() {
         </div>
       )}
     </div>
+    </AuthGuard>
   );
 }

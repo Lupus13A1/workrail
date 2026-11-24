@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Check,
   ChevronDown,
@@ -26,6 +26,7 @@ import {
   type ProjectTemplate,
 } from "@/lib/project-dashboard";
 import { statusClass } from "@/lib/workspace-data";
+import { useWorkspaceStore } from "@/lib/workspace-store";
 import { Button } from "@/components/ui/button";
 import { ProjectKeyBadge } from "@/components/workspace/WorkrailTopbar";
 
@@ -48,10 +49,25 @@ export function ProjectsDashboard({
   onFavorite: (id: string) => void;
   onToggleMyWork: () => void;
 }) {
+  const { user, language } = useWorkspaceStore();
   const [query, setQuery] = useState("");
   const [template, setTemplate] = useState("All board types");
   const [sort, setSort] = useState("Recent activity");
   const [view, setView] = useState<"grid" | "list">("grid");
+
+  const localizedGreeting = useMemo(() => {
+    const hour = new Date().getHours();
+    if (language === "th") {
+      if (hour >= 5 && hour < 12) return "สวัสดีตอนเช้า";
+      if (hour >= 12 && hour < 17) return "สวัสดีตอนบ่าย";
+      if (hour >= 17 && hour < 21) return "สวัสดีตอนเย็น";
+      return "สวัสดีตอนค่ำ";
+    }
+    if (hour >= 5 && hour < 12) return "Good morning";
+    if (hour >= 12 && hour < 17) return "Good afternoon";
+    if (hour >= 17 && hour < 21) return "Good evening";
+    return "Good night";
+  }, [language]);
 
   const availableProjects = myWorkOnly ? projects.filter((project) => project.assignedIssues > 0) : projects;
   const recent = recentProjectIds
@@ -77,28 +93,28 @@ export function ProjectsDashboard({
     <div className="home-dashboard">
       <section className="home-hero">
         <div className="home-hero-copy">
-          <span className="home-eyebrow">THANET CHANKHUA</span>
-          <h1>{myWorkOnly ? "My work" : `${greeting}, THANET`}</h1>
+          <span className="home-eyebrow">{user?.name ? user.name.toUpperCase() : "KITTITEE SITTHISOM"}</span>
+          <h1>{myWorkOnly ? (language === "th" ? "งานของฉัน" : "My work") : `${localizedGreeting}, ${user?.name ? user.name.split(" ")[0] : "KITTITEE"}`}</h1>
           <p className="home-stats">
             <span>
-              <strong>{projects.length}</strong> {projects.length === 1 ? "project" : "projects"}
+              <strong>{projects.length}</strong> {language === "th" ? "โปรเจกต์" : projects.length === 1 ? "project" : "projects"}
             </span>
             <span>
-              <strong>{assignedTotal}</strong> open {assignedTotal === 1 ? "issue" : "issues"} assigned to you
+              <strong>{assignedTotal}</strong> {language === "th" ? "งานที่มอบหมายให้คุณ" : `open ${assignedTotal === 1 ? "issue" : "issues"} assigned to you`}
             </span>
             <span>
-              <strong>{activeSprints}</strong> {activeSprints === 1 ? "sprint" : "sprints"} running
+              <strong>{activeSprints}</strong> {language === "th" ? "สปรินต์ที่กำลังรัน" : `${activeSprints === 1 ? "sprint" : "sprints"} running`}
             </span>
           </p>
         </div>
         <button className="home-create" onClick={onCreate}>
-          <Plus size={15} /> Create project
+          <Plus size={15} /> {language === "th" ? "สร้างโปรเจกต์" : "Create project"}
         </button>
       </section>
 
       {recent.length > 0 && (
         <div className="home-recent">
-          <span className="home-label">RECENTLY OPENED</span>
+          <span className="home-label">{language === "th" ? "เปิดล่าสุด" : "RECENTLY OPENED"}</span>
           {recent.map((project) => (
             <button key={project.id} className="home-recent-chip" onClick={() => onOpen(project)}>
               <ProjectKeyBadge project={project} small />

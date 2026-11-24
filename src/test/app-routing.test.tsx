@@ -14,4 +14,12 @@ describe("App routing", () => {
 
     expect(matches.at(-1)?.routeId).not.toBe(rootRouteId);
   });
+
+  it("matches auth routes for /login, /register, and /forgot-password", () => {
+    const router = createRouter({ routeTree, context: { queryClient: new QueryClient() } });
+
+    expect(router.matchRoutes("/login").at(-1)?.routeId).toBe("/login");
+    expect(router.matchRoutes("/register").at(-1)?.routeId).toBe("/register");
+    expect(router.matchRoutes("/forgot-password").at(-1)?.routeId).toBe("/forgot-password");
+  });
 });

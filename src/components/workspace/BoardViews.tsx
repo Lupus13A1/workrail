@@ -21,6 +21,7 @@ import {
 
 import { pipelineColumns, statusClass, type Issue } from "@/lib/workspace-data";
 import type { DropPosition } from "@/lib/workspace-store";
+import { useI18n } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
 
 type DropTargetState = {
@@ -70,10 +71,11 @@ export function SectionHeading({
 }
 
 export function PriorityLabel({ priority }: { priority: Issue["priority"] }) {
+  const { t } = useI18n();
   return (
     <span className={`priority-label priority-${priority.toLowerCase()}`}>
       {priority === "High" ? <ArrowUp size={12} /> : priority === "Low" ? <ArrowDown size={12} /> : <ArrowRight size={12} />}
-      {priority}
+      {t.board.priorities[priority] ?? priority}
     </span>
   );
 }
@@ -121,6 +123,7 @@ export function BoardView({
   onCreateSubtask?: (parentIssue: Issue, title: string) => Issue | null;
   onToggleSubtaskDone?: (subtask: Issue) => void;
 }) {
+  const { language, t } = useI18n();
   const [dragIssueId, setDragIssueId] = useState<string | null>(null);
   const [dropColumn, setDropColumn] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<DropTargetState>(null);
@@ -142,15 +145,17 @@ export function BoardView({
     <>
       {selectMode && selectedIds.length > 0 && (
         <div className="bulk-select-bar">
-          <span>{selectedIds.length} selected</span>
+          <span>
+            {selectedIds.length} {language === "th" ? "รายการที่เลือก" : "selected"}
+          </span>
           <div className="bulk-select-actions">
             {boardColumns.map((column) => (
               <Button key={column} size="sm" variant="outline" onClick={() => onBulkMove(column)}>
-                Move to {column}
+                {language === "th" ? `ย้ายไป ${t.board.columnTitles[column] ?? column}` : `Move to ${column}`}
               </Button>
             ))}
             <Button size="sm" variant="ghost" onClick={onClearSelection}>
-              Clear
+              {language === "th" ? "ยกเลิก" : "Clear"}
             </Button>
           </div>
         </div>
@@ -206,11 +211,11 @@ export function BoardView({
                 <div className="section-inline-title">
                   <div>
                     <span className={`status-dot ${statusClass(column)}`} />
-                    <h3>{column}</h3>
+                    <h3>{t.board.columnTitles[column] ?? column}</h3>
                     <span className="soft-pill">{columnIssues.length}</span>
                   </div>
                   <Button size="sm" variant="ghost" onClick={onOpenNewIssue}>
-                    <Plus size={14} /> Add issue
+                    <Plus size={14} /> {t.board.addIssue}
                   </Button>
                 </div>
                 {columnIssues.map((issue) => (
@@ -318,7 +323,7 @@ export function BoardView({
                       {collapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
                     </button>
                     <span className={`status-dot ${statusClass(column)}`} />
-                    <h3>{column}</h3>
+                    <h3>{t.board.columnTitles[column] ?? column}</h3>
                     <span className="column-count">{columnIssues.length}</span>
                     <Button variant="ghost" size="icon" className="column-add" title={`Create an issue in ${column}`} onClick={onOpenNewIssue}>
                       <Plus size={15} />

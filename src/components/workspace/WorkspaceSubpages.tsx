@@ -394,7 +394,6 @@ export function BriefView({ onCopy }: { onCopy: (text: string, message?: string)
           </div>
         </div>
       )}
->>>>>>> 56dd1a23649dcce43b4a06cdce6d3dab0349f5e7
     </div>
   );
 }

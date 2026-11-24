@@ -42,11 +42,10 @@ export function ProjectKeyBadge({ project, small = false }: { project: Project; 
 const menuItems: { label: string; icon: ReactNode; target: WorkspaceView | "Projects" | "My work" }[] = [
   { label: "Projects", icon: <SquareKanban size={15} />, target: "Projects" },
   { label: "My work", icon: <ListTodo size={15} />, target: "My work" },
-  { label: "Sales & billing", icon: <WalletCards size={15} />, target: "Sales & Billing" },
   { label: "Manager insights", icon: <Activity size={15} />, target: "Manager Insights" },
-  { label: "Company brief", icon: <FileCode2 size={15} />, target: "Project Brief" },
+  { label: "Project docs & brief", icon: <FileCode2 size={15} />, target: "Project Brief" },
   { label: "Agent & MCP access", icon: <Bot size={15} />, target: "MCP & AI Integration" },
-  { label: "Team & seats", icon: <Users size={15} />, target: "Team & Seat-Day Billing" },
+  { label: "Users & members", icon: <Users size={15} />, target: "Team & Seat-Day Billing" },
 ];
 
 export function WorkrailTopbar({
@@ -158,7 +157,6 @@ export function WorkrailTopbar({
         <button className="home-global-search" onClick={onSearch}>
           <Search size={14} />
           <span>Search issues, jump to…</span>
-          <kbd>Ctrl K</kbd>
         </button>
         <button
           className="home-icon-button"

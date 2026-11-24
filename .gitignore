@@ -16,6 +16,7 @@ dist-ssr
 .nitro
 .netlify
 *.local
+backup
 
 # Wrangler / Cloudflare
 .wrangler/
@@ -31,3 +32,5 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+plan-workrail.md
+backend

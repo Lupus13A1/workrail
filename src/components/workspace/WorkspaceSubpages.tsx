@@ -28,73 +28,366 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { SectionHeading } from "@/components/workspace/BoardViews";
 
-export function BriefView({ onCopy }: { onCopy: (text: string) => void }) {
-  const [markdown, setMarkdown] = useState(
+export function BriefView({ onCopy }: { onCopy: (text: string, message?: string) => void }) {
+  const [docKind, setDocKind] = useState<"brief" | "notes" | "handoffs">("brief");
+  const [editMode, setEditMode] = useState<"edit" | "preview">("edit");
+  const [briefMarkdown, setBriefMarkdown] = useState(
     "# Storefront refresh\n\nA clear, reliable shopping experience for every customer.\n\n## Workflow rules\n| Status | Definition |\n| --- | --- |\n| To Do | Prioritized and ready to start |\n| In Progress | Actively being worked on |\n| In Review | Ready for teammate review |\n| Testing (UAT) | Awaiting customer acceptance |\n| Done | Verified and released |\n\n## QA hand-off\n- Share the PR and test notes before moving to Testing (UAT).\n- Mention the QA team when handing work off.\n- Keep customer information private.",
   );
-  const insert = (text: string) => setMarkdown((previous) => `${previous}\n\n${text}`);
+  const [notesMarkdown, setNotesMarkdown] = useState(
+    "# Working notes · API & Auth\n\nLabels: `Identity`, `API`\n\n## Current progress\n- WebAuthn passkey registration endpoint is ready.\n- Rate-limiter uses token bucket per IP in `auth/limiter.ts`.\n\n## Caveats\n- Always keep email sign-in fallback active during UAT.",
+  );
+  const [noteLabels, setNoteLabels] = useState<string[]>(["Identity", "API"]);
+  const [newLabelInput, setNewLabelInput] = useState("");
+  const [handoffs, setHandoffs] = useState([
+    {
+      id: "H-1",
+      title: "Passkey login & profile refresh ready for QA",
+      targetRole: "QA",
+      issues: ["APP-104", "APP-126"],
+      status: "open" as "open" | "acknowledged" | "closed",
+      author: "Alex Morgan",
+      updatedAt: "Today, 14:20",
+      body: "Merged PR #184. Please verify passkey registration on mobile Safari and empty profile state.",
+    },
+    {
+      id: "H-2",
+      title: "Checkout receipt layout handoff",
+      targetRole: "Developer",
+      issues: ["APP-108"],
+      status: "acknowledged" as "open" | "acknowledged" | "closed",
+      author: "Maya Chen",
+      updatedAt: "Yesterday",
+      body: "Updated receipt totals and tax breakdown specs.",
+    },
+  ]);
+  const [newHandoffTitle, setNewHandoffTitle] = useState("");
+  const [newHandoffRole, setNewHandoffRole] = useState("QA");
+  const [newHandoffIssues, setNewHandoffIssues] = useState("APP-104");
+  const [newHandoffBody, setNewHandoffBody] = useState("");
+
+  const activeMarkdown = docKind === "brief" ? briefMarkdown : notesMarkdown;
+  const setActiveMarkdown = (text: string) => {
+    if (docKind === "brief") setBriefMarkdown(text);
+    else setNotesMarkdown(text);
+  };
+  const insert = (text: string) => setActiveMarkdown(`${activeMarkdown}\n\n${text}`);
+
+  const copyAiContext = () => {
+    const openHandoffsText = handoffs
+      .filter((h) => h.status !== "closed")
+      .map((h) => `### ${h.id}: ${h.title} (to ${h.targetRole}, status: ${h.status})\nIssues: ${h.issues.join(", ")}\n${h.body}`)
+      .join("\n\n");
+    const combined = `# Project Brief\n${briefMarkdown}\n\n# Working Notes (${noteLabels.join(", ")})\n${notesMarkdown}\n\n# Open Handoffs\n${openHandoffsText}`;
+    onCopy(combined, "Copied full project context for AI");
+  };
 
   return (
     <div className="subpage">
       <SectionHeading
-        eyebrow="PROJECT DOCUMENTATION"
-        title="Project brief"
-        description="A shared source of truth for your team and connected AI agents."
+        eyebrow="PROJECT DOCUMENTATION · .MD"
+        title="Project docs & brief"
+        description="A shared source of truth (Brief, Working notes, and Handoffs) for your team and connected AI agents."
         action={
-          <Button size="sm" onClick={() => onCopy(markdown)}>
-            <FileCode2 size={15} /> Copy .md
-          </Button>
+          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+            <Button size="sm" variant="outline" onClick={copyAiContext}>
+              <Sparkles size={14} /> Copy context for AI
+            </Button>
+            <Button size="sm" onClick={() => onCopy(activeMarkdown, "Copied .md")}>
+              <FileCode2 size={15} /> Copy .md
+            </Button>
+          </div>
         }
       />
+
       <div className="brief-info">
         <Sparkles size={17} />
-        <p>This Markdown brief sets the workflow rules that connected AI agents and teammates follow for this project.</p>
+        <p>
+          <strong>Brief</strong> sets the workflow rules that AI agents follow. <strong>Working notes</strong> and{" "}
+          <strong>Handoffs</strong> share live progress and team hand-offs across cards.
+        </p>
         <ShieldCheck size={17} />
       </div>
+
       <div className="brief-editor-top">
-        <div className="segmented">
-          <span className="segment-active">
-            <AlignLeft size={14} /> Edit .md
-          </span>
-          <span>
-            <FileText size={14} /> Preview
-          </span>
+        <div className="segmented" role="tablist" aria-label="Document type">
+          <button
+            type="button"
+            className={docKind === "brief" ? "segment-active" : ""}
+            onClick={() => setDocKind("brief")}
+          >
+            <FileCode2 size={14} /> Brief (docs/brief)
+          </button>
+          <button
+            type="button"
+            className={docKind === "notes" ? "segment-active" : ""}
+            onClick={() => setDocKind("notes")}
+          >
+            <FileText size={14} /> Working notes (docs/notes)
+          </button>
+          <button
+            type="button"
+            className={docKind === "handoffs" ? "segment-active" : ""}
+            onClick={() => setDocKind("handoffs")}
+          >
+            <Send size={14} /> Handoffs ({handoffs.filter((h) => h.status === "open").length} open)
+          </button>
         </div>
-        <span className="saved-indicator">
-          <span className="live-dot" /> Saved just now
-        </span>
+
+        {docKind !== "handoffs" && (
+          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            <div className="segmented">
+              <button
+                type="button"
+                className={editMode === "edit" ? "segment-active" : ""}
+                onClick={() => setEditMode("edit")}
+              >
+                <AlignLeft size={14} /> Edit .md
+              </button>
+              <button
+                type="button"
+                className={editMode === "preview" ? "segment-active" : ""}
+                onClick={() => setEditMode("preview")}
+              >
+                <FileText size={14} /> Preview
+              </button>
+            </div>
+            <span className="saved-indicator">
+              <span className="live-dot" /> Saved just now · v3
+            </span>
+          </div>
+        )}
       </div>
-      <div className="snippet-buttons">
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={() =>
-            insert(
-              "## Status definitions\n| Status | Definition |\n| --- | --- |\n| In Review | Ready for review |\n| Testing (UAT) | Ready for acceptance testing |",
-            )
-          }
-        >
-          + Insert status table
-        </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={() =>
-            insert(
-              "## QA hand-off rules\n- Include a merged pull request.\n- Add test notes and expected results.\n- Mention @QA before moving to Testing (UAT).",
-            )
-          }
-        >
-          + Insert QA hand-off rules
-        </Button>
-      </div>
-      <Textarea
-        className="markdown-editor"
-        aria-label="Edit project brief Markdown"
-        value={markdown}
-        onChange={(event) => setMarkdown(event.target.value)}
-        spellCheck={false}
-      />
+
+      {docKind === "brief" && (
+        <>
+          <div className="snippet-buttons">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() =>
+                insert(
+                  "## Status definitions\n| Status | Definition |\n| --- | --- |\n| In Review | Ready for review |\n| Testing (UAT) | Ready for acceptance testing |",
+                )
+              }
+            >
+              + Insert status table
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() =>
+                insert(
+                  "## QA hand-off rules\n- Include a merged pull request.\n- Add test notes and expected results.\n- Mention @QA before moving to Testing (UAT).",
+                )
+              }
+            >
+              + Insert QA hand-off rules
+            </Button>
+          </div>
+          {editMode === "edit" ? (
+            <Textarea
+              className="markdown-editor"
+              aria-label="Edit project brief Markdown"
+              value={briefMarkdown}
+              onChange={(event) => setBriefMarkdown(event.target.value)}
+              spellCheck={false}
+            />
+          ) : (
+            <pre className="markdown-editor" style={{ whiteSpace: "pre-wrap", fontFamily: "inherit" }}>
+              {briefMarkdown}
+            </pre>
+          )}
+        </>
+      )}
+
+      {docKind === "notes" && (
+        <>
+          <div className="snippet-buttons" style={{ alignItems: "center" }}>
+            <span style={{ fontSize: "12px", opacity: 0.75 }}>Scoped labels (matched with card labels in get_issue_context):</span>
+            {noteLabels.map((lbl) => (
+              <span key={lbl} className="soft-pill" style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                {lbl}
+                <button
+                  type="button"
+                  aria-label={`Remove label ${lbl}`}
+                  onClick={() => setNoteLabels((prev) => prev.filter((item) => item !== lbl))}
+                  style={{ border: "none", background: "transparent", cursor: "pointer", padding: 0, fontSize: "12px" }}
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+            <input
+              type="text"
+              className="cp-input"
+              style={{ width: "140px", height: "28px", fontSize: "12px" }}
+              placeholder="+ Add label"
+              value={newLabelInput}
+              onChange={(e) => setNewLabelInput(e.target.value)}
+            />
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                const clean = newLabelInput.trim();
+                if (clean && !noteLabels.includes(clean) && noteLabels.length < 10) {
+                  setNoteLabels((prev) => [...prev, clean]);
+                  setNewLabelInput("");
+                }
+              }}
+            >
+              Add label
+            </Button>
+          </div>
+          {editMode === "edit" ? (
+            <Textarea
+              className="markdown-editor"
+              aria-label="Edit working notes Markdown"
+              value={notesMarkdown}
+              onChange={(event) => setNotesMarkdown(event.target.value)}
+              spellCheck={false}
+            />
+          ) : (
+            <pre className="markdown-editor" style={{ whiteSpace: "pre-wrap", fontFamily: "inherit" }}>
+              {notesMarkdown}
+            </pre>
+          )}
+        </>
+      )}
+
+      {docKind === "handoffs" && (
+        <div style={{ display: "grid", gap: "16px", marginTop: "12px" }}>
+          <div className="am-card" style={{ padding: "16px" }}>
+            <span className="am-card-eyebrow">NEW HANDOFF (DOCS/HANDOFFS/H-N.MD)</span>
+            <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr auto", gap: "10px", marginTop: "10px" }}>
+              <input
+                type="text"
+                className="cp-input"
+                placeholder="Handoff summary title..."
+                value={newHandoffTitle}
+                onChange={(e) => setNewHandoffTitle(e.target.value)}
+              />
+              <select
+                className="cp-input"
+                value={newHandoffRole}
+                onChange={(e) => setNewHandoffRole(e.target.value)}
+                aria-label="Target role"
+              >
+                <option value="QA">To: QA</option>
+                <option value="Developer">To: Developer</option>
+                <option value="BA">To: BA</option>
+                <option value="DevOps">To: DevOps</option>
+                <option value="All project">To: Whole project</option>
+              </select>
+              <input
+                type="text"
+                className="cp-input"
+                placeholder="Issues (e.g. APP-104)"
+                value={newHandoffIssues}
+                onChange={(e) => setNewHandoffIssues(e.target.value)}
+              />
+              <Button
+                size="sm"
+                onClick={() => {
+                  if (!newHandoffTitle.trim()) return;
+                  const nextId = `H-${handoffs.length + 1}`;
+                  setHandoffs((prev) => [
+                    {
+                      id: nextId,
+                      title: newHandoffTitle.trim(),
+                      targetRole: newHandoffRole,
+                      issues: newHandoffIssues
+                        .split(",")
+                        .map((s) => s.trim())
+                        .filter(Boolean),
+                      status: "open",
+                      author: "Thanet Chankhua",
+                      updatedAt: "Just now",
+                      body: newHandoffBody.trim() || "Ready for review and verification.",
+                    },
+                    ...prev,
+                  ]);
+                  setNewHandoffTitle("");
+                  setNewHandoffBody("");
+                  onCopy(nextId, `Created handoff ${nextId}`);
+                }}
+              >
+                <Plus size={14} /> Create handoff
+              </Button>
+            </div>
+            <Textarea
+              className="cp-input"
+              style={{ marginTop: "10px", minHeight: "72px" }}
+              placeholder="Handoff notes, test steps, or deployment context..."
+              value={newHandoffBody}
+              onChange={(e) => setNewHandoffBody(e.target.value)}
+            />
+          </div>
+
+          <div style={{ display: "grid", gap: "10px" }}>
+            {handoffs.map((h) => (
+              <div key={h.id} className="am-card" style={{ padding: "14px 16px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                    <code>{h.id}</code>
+                    <strong>{h.title}</strong>
+                    <span className="am-role-tag">To: {h.targetRole}</span>
+                    {h.issues.map((k) => (
+                      <span key={k} className="file-path-pill">
+                        {k}
+                      </span>
+                    ))}
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    <span className="soft-pill">
+                      {h.status === "open" ? "Open" : h.status === "acknowledged" ? "Acknowledged" : "Closed"}
+                    </span>
+                    {h.status === "open" && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() =>
+                          setHandoffs((prev) =>
+                            prev.map((item) => (item.id === h.id ? { ...item, status: "acknowledged" } : item)),
+                          )
+                        }
+                      >
+                        <Check size={13} /> Acknowledge
+                      </Button>
+                    )}
+                    {h.status !== "closed" ? (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() =>
+                          setHandoffs((prev) => prev.map((item) => (item.id === h.id ? { ...item, status: "closed" } : item)))
+                        }
+                      >
+                        Close
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() =>
+                          setHandoffs((prev) => prev.map((item) => (item.id === h.id ? { ...item, status: "open" } : item)))
+                        }
+                      >
+                        Reopen
+                      </Button>
+                    )}
+                  </div>
+                </div>
+                <p style={{ margin: "8px 0 4px", fontSize: "13px", opacity: 0.9 }}>{h.body}</p>
+                <small style={{ opacity: 0.65 }}>
+                  By {h.author} · {h.updatedAt} · docs/handoffs/{h.id}.md
+                </small>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -451,8 +744,8 @@ type ToolItem = {
 
 const MCP_TOOLS: ToolItem[] = [
   {
-    id: "working_on",
-    title: "Working on",
+    id: "work_context",
+    title: "Work context (working / touches)",
     desc: "what each agent is doing on a card and which files it touches",
     kb: 7,
     essentialDefault: true,
@@ -467,7 +760,7 @@ const MCP_TOOLS: ToolItem[] = [
   {
     id: "releases",
     title: "Releases",
-    desc: "plan releases and put issues in them",
+    desc: "plan releases, release notes, and deployment logs",
     kb: 24,
     essentialDefault: false,
   },
@@ -477,27 +770,6 @@ const MCP_TOOLS: ToolItem[] = [
     desc: "scrum sprints and burndown",
     kb: 11,
     essentialDefault: true,
-  },
-  {
-    id: "sales",
-    title: "Sales documents",
-    desc: "quotations, billing notes, receipts",
-    kb: 7,
-    essentialDefault: false,
-  },
-  {
-    id: "support",
-    title: "Support cases",
-    desc: "support cases with the Workrail team",
-    kb: 16,
-    essentialDefault: false,
-  },
-  {
-    id: "insights",
-    title: "Insights",
-    desc: "manager numbers and automatic summaries",
-    kb: 10,
-    essentialDefault: false,
   },
   {
     id: "files",
@@ -514,10 +786,17 @@ const MCP_TOOLS: ToolItem[] = [
     essentialDefault: false,
   },
   {
-    id: "votes",
+    id: "votes_watchers",
     title: "Votes and watchers",
     desc: "votes and watching issues",
     kb: 8,
+    essentialDefault: false,
+  },
+  {
+    id: "insights",
+    title: "Insights",
+    desc: "manager numbers and automatic summaries",
+    kb: 10,
     essentialDefault: false,
   },
 ];
@@ -619,7 +898,6 @@ export function IntegrationView({ onCopy }: { onCopy: (text: string, message?: s
   const currentClient = clientCommands[aiClient] ?? clientCommands["Claude Code"]!;
 
   const handleCreateAgent = () => {
-    if (agents.length >= 10) return;
     const nextNum = agents.length + 1;
     const created = {
       id: `agent-${Date.now()}`,
@@ -633,14 +911,14 @@ export function IntegrationView({ onCopy }: { onCopy: (text: string, message?: s
 
   const handleCreateToken = () => {
     const cleanName = tokenName.trim() || "Claude Code";
-    const secret = `bm_pat_${Math.random().toString(36).slice(2, 10)}${Math.random().toString(36).slice(2, 8)}`;
+    const secret = `board_pat_${Math.random().toString(36).slice(2, 10)}${Math.random().toString(36).slice(2, 8)}`;
     setTokens((prev) => [
       {
         id: `tok-${Date.now()}`,
         name: cleanName,
         role: tokenRole.trim() || "General",
         expiry: tokenExpiry,
-        preview: `${secret.slice(0, 11)}…`,
+        preview: `${secret.slice(0, 14)}…`,
       },
       ...prev,
     ]);
@@ -676,7 +954,7 @@ export function IntegrationView({ onCopy }: { onCopy: (text: string, message?: s
             <section className="am-card">
               <span className="am-card-eyebrow">MY AGENTS</span>
               <p className="am-card-desc">
-                An agent account is a named AI agent of your company that you own: it works with your rights, keeps a run log and has a pause button — on every plan, and it never takes a seat.
+                An agent account is a named AI agent that you own: it works with your rights, keeps a run log and has a pause button.
               </p>
               <p className="am-card-desc">
                 Already use a personal token in an AI client? Use &ldquo;Convert to agent account&rdquo; on that token below to move it to one of these agents.
@@ -686,19 +964,22 @@ export function IntegrationView({ onCopy }: { onCopy: (text: string, message?: s
                 <button type="button" className="am-lime-btn" onClick={handleCreateAgent}>
                   <Plus size={15} /> Create agent
                 </button>
-                <button
-                  type="button"
-                  className="am-outline-btn"
-                  onClick={() => onCopy("Manage all company agents", "Opened company agents directory")}
-                >
-                  <Sparkles size={14} /> Manage all company agents
-                </button>
-              </div>
-
-              <div className="am-limit-bar">
-                <span className="am-limit-label">COMPANY AGENT LIMIT</span>
-                <span className="am-beta-pill">Beta</span>
-                <strong>{agents.length} of 10 used</strong>
+                {agents.length > 0 && (
+                  <button
+                    type="button"
+                    className="am-outline-btn"
+                    onClick={() => {
+                      const anyActive = agents.some((a) => !a.paused);
+                      setAgents((prev) => prev.map((a) => ({ ...a, paused: anyActive })));
+                      onCopy(
+                        anyActive ? "Paused all agents" : "Resumed all agents",
+                        anyActive ? "All agents paused (403 agent_paused)" : "All agents resumed",
+                      );
+                    }}
+                  >
+                    {agents.some((a) => !a.paused) ? "Pause all agents" : "Resume all agents"}
+                  </button>
+                )}
               </div>
 
               {agents.length === 0 ? (
@@ -1089,54 +1370,38 @@ export function IntegrationView({ onCopy }: { onCopy: (text: string, message?: s
 
 export function TeamView({ onNotice }: { onNotice: (message: string) => void }) {
   const [activePeople, setActivePeople] = useState([true, true, true, false]);
+  const [memberRoles, setMemberRoles] = useState(["Project admin", "Developer", "QA", "BA"]);
   const activeCount = activePeople.filter(Boolean).length;
-  const seats = getBillableHumanSeats(activeCount);
-  const days = getBillableSeatDays(activePeople.map((active, index) => (active ? [31, 31, 12, 0][index] ?? 0 : 0)));
 
   const toggle = (index: number) => {
     const person = people[index] ?? "Team member";
     const next = !activePeople[index];
-    if (!next && !window.confirm(`Suspend ${person}? Daily billing stops tomorrow. Their issues, comments, and Markdown records remain preserved.`)) {
+    if (!next && !window.confirm(`Suspend ${person}? Their issues, comments, and Markdown records remain preserved.`)) {
       return;
     }
     setActivePeople((current) => current.map((active, personIndex) => (personIndex === index ? next : active)));
-    onNotice(next ? `${person} is active again` : `${person} suspended · billing stops tomorrow`);
+    onNotice(next ? `${person} is active again` : `${person} suspended`);
   };
 
   return (
     <div className="subpage">
       <SectionHeading
-        eyebrow="WORKSPACE ADMINISTRATION"
-        title="Team & seat-day billing"
-        description="Simple pricing, clear usage, no cost for your AI agents."
+        eyebrow="USER & ROLE MANAGEMENT"
+        title="Users & project members"
+        description="Manage workspace users, default role lanes (Developer, QA, BA, Project admin), and account status."
         action={
           <Button size="sm" variant="outline" onClick={() => onNotice("Invite link copied")}>
-            <Plus size={15} /> Invite member
+            <Plus size={15} /> Invite user
           </Button>
         }
       />
-      <div className="billing-principle">
-        <div className="principle-icon">
-          <ShieldCheck size={21} />
-        </div>
-        <div>
-          <strong>First 2 human seats free forever.</strong>
-          <span>AI agents cost 0 seats. Pay only for active seat-days.</span>
-        </div>
-        <span className="principle-free">FAIR BY DESIGN</span>
-      </div>
       <div className="billing-cards">
         <div className="billing-card">
-          <span>ACTIVE HUMAN SEATS</span>
+          <span>ACTIVE USERS</span>
           <strong>
-            {activeCount} <small>seats</small>
+            {activeCount} <small>users</small>
           </strong>
-          <p>
-            {Math.min(activeCount, 2)} free · {seats} billable
-          </p>
-          <div className="billing-meter">
-            <i style={{ width: `${Math.min((activeCount / 6) * 100, 100)}%` }} />
-          </div>
+          <p>{people.length} total registered users</p>
         </div>
         <div className="billing-card">
           <span>CONNECTED AI AGENTS</span>
@@ -1145,7 +1410,7 @@ export function TeamView({ onNotice }: { onNotice: (message: string) => void }) 
           </strong>
           <p>
             <span className="free-badge">
-              <Sparkles size={12} /> Free forever · 0 seat cost
+              <Sparkles size={12} /> Same permissions as owner (user parity)
             </span>
           </p>
           <div className="agent-icons">
@@ -1164,28 +1429,28 @@ export function TeamView({ onNotice }: { onNotice: (message: string) => void }) 
           </div>
         </div>
         <div className="billing-card accrued-card">
-          <span>THIS MONTH · ACCRUED SEAT-DAYS</span>
+          <span>ROLE LANES</span>
           <strong>
-            {days} <small>billable days</small>
+            4 <small>lanes</small>
           </strong>
-          <p>Sum of each active seat’s billable days</p>
-          <div className="seat-formula">Billable active seats × active days</div>
+          <p>Developer · QA · BA · DevOps</p>
+          <div className="seat-formula">Used for board lane guidance & handoffs</div>
         </div>
       </div>
       <div className="member-table-wrap">
         <div className="deal-list-heading">
           <div>
-            <h3>Team members</h3>
-            <p>Manage active seats and view billing activity.</p>
+            <h3>Users</h3>
+            <p>Manage user roles, role lanes, and active access status.</p>
           </div>
           <span className="soft-pill">{activeCount} active</span>
         </div>
         <div className="member-table">
           <div className="member-table-head">
-            <span>TEAM MEMBER</span>
-            <span>ROLE</span>
-            <span>ACTIVE DAYS</span>
-            <span>SEAT STATUS</span>
+            <span>USER</span>
+            <span>ROLE / LANE</span>
+            <span>ACCESS</span>
+            <span>STATUS</span>
           </div>
           {people.map((person, index) => (
             <div className="member-table-row" key={person}>
@@ -1194,8 +1459,27 @@ export function TeamView({ onNotice }: { onNotice: (message: string) => void }) 
                 <strong>{person}</strong>
                 {index === 0 && <span className="you-badge">YOU</span>}
               </span>
-              <span>{index === 0 ? "Company admin" : "Member"}</span>
-              <span>{activePeople[index] ? [31, 31, 12, 0][index] ?? 0 : 0} days</span>
+              <span>
+                <select
+                  className="cp-input"
+                  style={{ height: "30px", fontSize: "12px", width: "145px" }}
+                  value={memberRoles[index] ?? "Developer"}
+                  aria-label={`Role for ${person}`}
+                  onChange={(e) => {
+                    const nextRole = e.target.value;
+                    setMemberRoles((prev) => prev.map((r, i) => (i === index ? nextRole : r)));
+                    onNotice(`Updated ${person} role to ${nextRole}`);
+                  }}
+                >
+                  <option value="Project admin">Project admin</option>
+                  <option value="Developer">Developer</option>
+                  <option value="QA">QA</option>
+                  <option value="BA">BA</option>
+                  <option value="DevOps">DevOps</option>
+                  <option value="Viewer">Viewer</option>
+                </select>
+              </span>
+              <span>{index === 0 ? "Project admin" : "Member"}</span>
               <span className="seat-toggle-cell">
                 <button
                   className={`seat-toggle ${activePeople[index] ? "is-on" : ""}`}
@@ -1214,7 +1498,7 @@ export function TeamView({ onNotice }: { onNotice: (message: string) => void }) 
           ))}
         </div>
         <p className="billing-footnote">
-          <LockKeyhole size={13} /> Suspended seats stop accruing charges tomorrow. All existing work and records are preserved.
+          <LockKeyhole size={13} /> If an owner is suspended, their connected AI agents pause automatically (`403 agent_paused`). All existing work and Markdown records are preserved.
         </p>
       </div>
     </div>

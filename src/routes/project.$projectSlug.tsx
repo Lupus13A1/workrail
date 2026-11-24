@@ -650,6 +650,13 @@ function ProjectWorkspacePage() {
             setSprintsOpen(false);
             setStartSprintTarget(sprint);
           }}
+          onDeleteSprint={(sprint) => {
+            store.updateSprints(activeProject.id, (current) => current.filter((item) => item.id !== sprint.id));
+            issues
+              .filter((iss) => iss.sprint === sprint.name)
+              .forEach((iss) => store.updateIssue(activeProject.id, iss.id, { sprint: "" }));
+            store.setNotice(`Deleted ${sprint.code} · issues returned to backlog`);
+          }}
         />
       )}
       {startSprintTarget && (

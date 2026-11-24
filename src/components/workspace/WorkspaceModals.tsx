@@ -368,6 +368,7 @@ export function SprintsModal({
   onCreateSprint,
   onOpenSprintIssues,
   onRequestStartSprint,
+  onDeleteSprint,
 }: {
   projectKey: string;
   sprints: SprintItem[];
@@ -375,13 +376,13 @@ export function SprintsModal({
   onCreateSprint: (sprint: Omit<SprintItem, "id" | "status" | "code">) => void;
   onOpenSprintIssues: () => void;
   onRequestStartSprint: (sprint: SprintItem) => void;
+  onDeleteSprint?: (sprint: SprintItem) => void;
 }) {
   const { t, language } = useI18n();
   const [name, setName] = useState(`Sprint ${sprints.length + 1}`);
   const [goal, setGoal] = useState("");
   const [start, setStart] = useState("2026-12-01");
   const [end, setEnd] = useState("2026-12-14");
-  const [reviewing, setReviewing] = useState(false);
 
   const days = getSprintDays(start, end);
 
@@ -420,99 +421,86 @@ export function SprintsModal({
                 </div>
                 <div className="sprint-row-actions">
                   <span className={`sprint-status-pill status-${sprint.status}`}>
-                    <i /> {sprint.status === "active" ? "Active" : sprint.status === "closed" ? "Closed" : "Not started"}
+                    <i /> {sprint.status === "active" ? (language === "th" ? "กำลังรัน" : "Active") : sprint.status === "closed" ? (language === "th" ? "ปิดแล้ว" : "Closed") : (language === "th" ? "ยังไม่เริ่ม" : "Not started")}
                   </span>
                   <Button type="button" size="sm" variant="outline" className="pill-control" onClick={onOpenSprintIssues}>
-                    View issues <ArrowRight size={13} />
+                    {language === "th" ? "ดูงานในสปรินต์" : "View issues"} <ArrowRight size={13} />
                   </Button>
                   {sprint.status === "planned" && (
                     <Button type="button" size="sm" className="create-button" onClick={() => onRequestStartSprint(sprint)}>
-                      <Play size={12} /> Start
+                      <Play size={12} /> {language === "th" ? "เริ่มสปรินต์" : "Start"}
                     </Button>
                   )}
-                  <Button type="button" size="icon" variant="outline" className="pill-control" title={`Edit ${sprint.name}`} onClick={() => setReviewing(false)}>
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="outline"
+                    className="pill-control"
+                    title={`Edit ${sprint.name}`}
+                    onClick={() => {
+                      setName(sprint.name);
+                      setGoal(sprint.goal || "");
+                      setStart(sprint.start);
+                      setEnd(sprint.end);
+                    }}
+                  >
                     <Pencil size={13} />
                   </Button>
+                  {sprint.status === "planned" && onDeleteSprint && (
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="outline"
+                      className="pill-control"
+                      title={`Delete ${sprint.name}`}
+                      onClick={() => onDeleteSprint(sprint)}
+                    >
+                      <Trash2 size={13} />
+                    </Button>
+                  )}
                 </div>
               </div>
             ))
           )}
         </div>
 
-        {!reviewing ? (
-          <form
-            className="new-sprint-form"
-            onSubmit={(event) => {
-              event.preventDefault();
-              if (!name.trim()) return;
-              setReviewing(true);
-            }}
-          >
-            <span className="eyebrow">{t.board.newSprint}</span>
-            <div className="form-grid">
-              <label className="form-label">
-                Name
-                <Input value={name} onChange={(event) => setName(event.target.value)} required />
-              </label>
-              <label className="form-label">
-                Goal (optional)
-                <Input value={goal} onChange={(event) => setGoal(event.target.value)} placeholder="Sprint objective" />
-              </label>
-              <label className="form-label">
-                Start
-                <Input type="date" value={start} onChange={(event) => setStart(event.target.value)} required />
-              </label>
-              <label className="form-label">
-                End
-                <Input type="date" value={end} onChange={(event) => setEnd(event.target.value)} required />
-              </label>
-            </div>
-            <p className="cp-hint">Starts the day after the latest sprint ends, same length. Dates may overlap other sprints.</p>
-            <div className="sprints-form-actions">
-              <Button type="submit" variant="outline" className="pill-control">
-                <Plus size={15} /> Create sprint
-              </Button>
-            </div>
-          </form>
-        ) : (
-          <div className="sprint-review-box">
-            <span className="eyebrow">REVIEW BEFORE CREATING</span>
-            <div className="sprint-review-table">
-              <div>
-                <span>Name</span>
-                <strong>{name.trim()}</strong>
-              </div>
-              <div>
-                <span>Start → End</span>
-                <strong>
-                  {start} → {end} · {days} days
-                </strong>
-              </div>
-              <div>
-                <span>Goal</span>
-                <strong>{goal.trim() || "—"}</strong>
-              </div>
-            </div>
-            <p className="cp-hint">These dates will be saved with the sprint.</p>
-            <div className="sprints-form-actions">
-              <Button type="button" variant="outline" className="pill-control" onClick={() => setReviewing(false)}>
-                Cancel
-              </Button>
-              <Button
-                type="button"
-                className="create-button"
-                onClick={() => {
-                  onCreateSprint({ name: name.trim(), goal: goal.trim(), start, end });
-                  setReviewing(false);
-                  setName(`Sprint ${sprints.length + 2}`);
-                  setGoal("");
-                }}
-              >
-                <Check size={15} /> Confirm create
-              </Button>
-            </div>
+        <form
+          className="new-sprint-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            const cleanName = name.trim();
+            if (!cleanName) return;
+            onCreateSprint({ name: cleanName, goal: goal.trim(), start, end });
+            setName(`Sprint ${sprints.length + 2}`);
+            setGoal("");
+          }}
+        >
+          <span className="eyebrow">{t.board.newSprint}</span>
+          <div className="form-grid">
+            <label className="form-label">
+              {language === "th" ? "ชื่อสปรินต์" : "Name"}
+              <Input value={name} onChange={(event) => setName(event.target.value)} required />
+            </label>
+            <label className="form-label">
+              {language === "th" ? "เป้าหมาย (ไม่บังคับ)" : "Goal (optional)"}
+              <Input value={goal} onChange={(event) => setGoal(event.target.value)} placeholder={language === "th" ? "เป้าหมายของสปรินต์นี้" : "Sprint objective"} />
+            </label>
+            <label className="form-label">
+              {language === "th" ? "วันเริ่มต้น" : "Start"}
+              <Input type="date" value={start} onChange={(event) => setStart(event.target.value)} required />
+            </label>
+            <label className="form-label">
+              {language === "th" ? "วันสิ้นสุด" : "End"}
+              <Input type="date" value={end} onChange={(event) => setEnd(event.target.value)} required />
+            </label>
           </div>
-        )}
+          <p className="cp-hint">{language === "th" ? "เริ่มในวันถัดจากสปรินต์ล่าสุด ระยะเวลาเท่ากัน สามารถกำหนดวันที่เองได้" : "Starts the day after the latest sprint ends, same length. Dates may overlap other sprints."}</p>
+          <div className="sprints-form-actions">
+            <Button type="submit" className="create-button">
+              <Plus size={15} /> {language === "th" ? "สร้างสปรินต์" : "Create sprint"}
+            </Button>
+          </div>
+        </form>
       </section>
     </div>
   );
@@ -723,11 +711,21 @@ export function IssueDrawer({
   const [editingDescription, setEditingDescription] = useState(false);
   const [descriptionDraft, setDescriptionDraft] = useState(issue.description);
   const [workingOn, setWorkingOn] = useState("");
+  const [touches, setTouches] = useState<string[]>(["auth/limiter.ts", "POST /login"]);
   const [editingWorkingOn, setEditingWorkingOn] = useState(false);
   const [workingOnDraft, setWorkingOnDraft] = useState("");
+  const [touchesDraft, setTouchesDraft] = useState("auth/limiter.ts, POST /login");
+  const [linkInput, setLinkInput] = useState("");
+  const [linkRelation, setLinkRelation] = useState<"blocks" | "blocked_by" | "relates" | "duplicates" | "clones">("relates");
+  const [issueLinks, setIssueLinks] = useState<{ type: string; key: string }[]>([
+    { type: "relates", key: "APP-108" },
+  ]);
   const [attachmentNames, setAttachmentNames] = useState<string[]>([]);
   const [comment, setComment] = useState("");
-  const [postedComments, setPostedComments] = useState<{ author: string; initials: string; text: string; time: string }[]>([]);
+  const [replyingTo, setReplyingTo] = useState<number | null>(null);
+  const [postedComments, setPostedComments] = useState<
+    { id: number; author: string; initials: string; text: string; time: string; replyTo?: number; edited?: boolean }[]
+  >([]);
   const [history, setHistory] = useState<{ text: string; time: string }[]>([
     { text: `created ${issue.key}`, time: "17 Nov, 11:41" },
   ]);
@@ -752,10 +750,23 @@ export function IssueDrawer({
   const submitComment = () => {
     if (!comment.trim()) return;
     const text = comment.trim();
-    setPostedComments((current) => [...current, { author: "Kittitee Sitthisom", initials: "KS", text, time: "Just now" }]);
+    const nextId = postedComments.length + 1;
+    setPostedComments((current) => [
+      ...current,
+      {
+        id: nextId,
+        author: "Kittitee Sitthisom",
+        initials: "KS",
+        text,
+        time: "Just now",
+        ...(replyingTo ? { replyTo: replyingTo } : {}),
+      },
+    ]);
     onChange({ comments: issue.comments + 1 });
+    setWatching(true);
     setHistory((current) => [{ text: `commented: "${text.slice(0, 40)}"`, time: "Just now" }, ...current]);
     setComment("");
+    setReplyingTo(null);
   };
 
   const recordChange = (label: string, changes: Partial<Issue>) => {
@@ -959,7 +970,6 @@ export function IssueDrawer({
                         <Button type="button" size="sm" variant="outline" className="pill-control" onClick={() => setEditingDescription(false)}>
                           Cancel
                         </Button>
-                        <kbd className="desc-kbd">Ctrl S</kbd>
                       </div>
                     </div>
                   ) : (
@@ -1234,26 +1244,37 @@ export function IssueDrawer({
             </section>
 
             <div className="working-on-bar">
-              <div className="working-on-copy">
-                <strong>{t.modals.workingOn}</strong>
+              <div className="working-on-copy" style={{ flex: 1 }}>
+                <strong>{language === "th" ? "กำลังทำงาน (working / touches)" : "Working on (working / touches)"}</strong>
                 {editingWorkingOn ? (
-                  <input
-                    className="cp-input working-on-input"
-                    autoFocus
-                    placeholder="What are you working on right now?"
-                    value={workingOnDraft}
-                    onChange={(event) => setWorkingOnDraft(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") {
-                        setWorkingOn(workingOnDraft.trim());
-                        setEditingWorkingOn(false);
-                      } else if (event.key === "Escape") {
-                        setEditingWorkingOn(false);
-                      }
-                    }}
-                  />
+                  <div style={{ display: "grid", gap: "8px", marginTop: "6px" }}>
+                    <input
+                      className="cp-input working-on-input"
+                      autoFocus
+                      placeholder="What is being done, with what approach, and why? (<= 600 chars)"
+                      value={workingOnDraft}
+                      onChange={(event) => setWorkingOnDraft(event.target.value)}
+                    />
+                    <input
+                      className="cp-input working-on-input"
+                      placeholder="Touches: files, modules, or APIs (comma-separated, up to 10)"
+                      value={touchesDraft}
+                      onChange={(event) => setTouchesDraft(event.target.value)}
+                    />
+                  </div>
                 ) : (
-                  <span>{workingOn || "No one has said what they are doing on this card."}</span>
+                  <>
+                    <span>{workingOn || "No one has said what they are doing on this card."}</span>
+                    {touches.length > 0 && (
+                      <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginTop: "6px" }}>
+                        {touches.map((t) => (
+                          <code key={t} className="file-path-pill" style={{ fontSize: "11px" }}>
+                            {t}
+                          </code>
+                        ))}
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
               {editingWorkingOn ? (
@@ -1263,6 +1284,13 @@ export function IssueDrawer({
                   className="create-button"
                   onClick={() => {
                     setWorkingOn(workingOnDraft.trim());
+                    setTouches(
+                      touchesDraft
+                        .split(",")
+                        .map((s) => s.trim())
+                        .filter(Boolean)
+                        .slice(0, 10),
+                    );
                     setEditingWorkingOn(false);
                   }}
                 >
@@ -1276,6 +1304,7 @@ export function IssueDrawer({
                   className="pill-control"
                   onClick={() => {
                     setWorkingOnDraft(workingOn);
+                    setTouchesDraft(touches.join(", "));
                     setEditingWorkingOn(true);
                   }}
                 >
@@ -1326,12 +1355,34 @@ export function IssueDrawer({
               </div>
               {postedComments.length > 0 && (
                 <div className="posted-comments-list">
-                  {postedComments.map((item, index) => (
-                    <div key={index} className="activity-entry">
+                  {postedComments.map((item) => (
+                    <div
+                      key={item.id}
+                      className="activity-entry"
+                      style={item.replyTo ? { marginLeft: "28px", borderLeft: "2px solid var(--border)", paddingLeft: "10px" } : undefined}
+                    >
                       <span className="avatar avatar-mint">{item.initials}</span>
-                      <div>
-                        <p>
+                      <div style={{ flex: 1 }}>
+                        <p style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
                           <strong>{item.author}</strong> <small>{item.time}</small>
+                          {item.replyTo && <small style={{ opacity: 0.7 }}>↳ reply to #{item.replyTo}</small>}
+                          {item.edited && <small style={{ opacity: 0.7 }}>(แก้ไขแล้ว)</small>}
+                          <button
+                            type="button"
+                            style={{ border: "none", background: "transparent", cursor: "pointer", fontSize: "12px", opacity: 0.75 }}
+                            onClick={() => setReplyingTo(item.id)}
+                          >
+                            Reply
+                          </button>
+                          <button
+                            type="button"
+                            style={{ border: "none", background: "transparent", cursor: "pointer", fontSize: "12px", opacity: 0.75 }}
+                            onClick={() =>
+                              setPostedComments((prev) => prev.filter((c) => c.id !== item.id))
+                            }
+                          >
+                            Delete
+                          </button>
                         </p>
                         <div className="rte-rendered-content" dangerouslySetInnerHTML={{ __html: markdownToHtml(item.text) }} />
                       </div>
@@ -1339,22 +1390,28 @@ export function IssueDrawer({
                   ))}
                 </div>
               )}
+              {replyingTo && (
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "12px", marginBottom: "6px" }}>
+                  <span>Replying to comment #{replyingTo}</span>
+                  <button
+                    type="button"
+                    style={{ border: "none", background: "transparent", cursor: "pointer", textDecoration: "underline" }}
+                    onClick={() => setReplyingTo(null)}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
               <div className="comment-composer rich-comment-composer">
                 <span className="avatar avatar-mint">KS</span>
                 <div className="comment-rich-box">
                   <RichTextEditor
                     ariaLabel="Write a comment"
-                    placeholder="Write a comment... paste or drop images and files · Ctrl+↵ to send"
+                    placeholder="Write a comment... use @ to mention teammates, or paste/drop files"
                     value={comment}
                     onChange={setComment}
                     minHeight={88}
                     showFooterHint={false}
-                    onKeyDown={(event) => {
-                      if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
-                        event.preventDefault();
-                        submitComment();
-                      }
-                    }}
                   />
                 </div>
               </div>
@@ -1454,7 +1511,7 @@ export function IssueDrawer({
             <label className="metadata-item">
               <span className="fm-label-row">
                 <span>POINTS</span>
-                <small>saves on Enter or blur</small>
+                <small>saves on blur</small>
               </span>
               <input
                 className="cp-input fm-points-input"
@@ -1496,6 +1553,60 @@ export function IssueDrawer({
                     onChange={(event) => onChange({ parent: event.target.value.toUpperCase() })}
                   />
                 </label>
+                <div className="metadata-item" style={{ display: "grid", gap: "6px" }}>
+                  <span>LINKS (BLOCKS / RELATES / DUPLICATES)</span>
+                  <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                    {issueLinks.map((lnk, idx) => (
+                      <span key={`${lnk.type}-${lnk.key}-${idx}`} className="file-path-pill" style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                        <Link2 size={11} /> {lnk.type}: <strong>{lnk.key}</strong>
+                        <button
+                          type="button"
+                          aria-label={`Unlink ${lnk.key}`}
+                          onClick={() => setIssueLinks((prev) => prev.filter((_, i) => i !== idx))}
+                          style={{ border: "none", background: "transparent", cursor: "pointer", padding: 0 }}
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                  <div style={{ display: "flex", gap: "6px" }}>
+                    <select
+                      className="cp-input"
+                      style={{ height: "28px", fontSize: "12px", width: "105px" }}
+                      value={linkRelation}
+                      aria-label="Link relation type"
+                      onChange={(e) => setLinkRelation(e.target.value as typeof linkRelation)}
+                    >
+                      <option value="relates">relates</option>
+                      <option value="blocks">blocks</option>
+                      <option value="blocked_by">blocked by</option>
+                      <option value="duplicates">duplicates</option>
+                      <option value="clones">clones</option>
+                    </select>
+                    <input
+                      className="cp-input"
+                      style={{ height: "28px", fontSize: "12px", flex: 1 }}
+                      placeholder="KEY-n (e.g. APP-108)"
+                      value={linkInput}
+                      onChange={(e) => setLinkInput(e.target.value.toUpperCase())}
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        const cleanKey = linkInput.trim().toUpperCase();
+                        if (!cleanKey) return;
+                        setIssueLinks((prev) => [...prev, { type: linkRelation, key: cleanKey }]);
+                        setLinkInput("");
+                        recordChange(`linked ${linkRelation} ${cleanKey}`, {});
+                      }}
+                    >
+                      Link
+                    </Button>
+                  </div>
+                </div>
                 <div className="fm-labels-row">
                   {issue.tags.map((tag) => (
                     <span key={tag} className="issue-tag">

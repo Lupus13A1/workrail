@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useLocation, useNavigate } from "@tanstack/react-router";
 import { Check, X } from "lucide-react";
 
 import type { Project } from "@/lib/project-dashboard";
@@ -11,7 +11,7 @@ import { AuthGuard } from "@/components/auth/AuthGuard";
 import { CreateProjectModal, ProjectsDashboard } from "@/components/workspace/ProjectsHome";
 import { WorkrailTopbar } from "@/components/workspace/WorkrailTopbar";
 import { GlobalSearchModal } from "@/components/workspace/WorkspaceModals";
-import { BriefView, InsightsView, IntegrationView, SalesView, TeamView } from "@/components/workspace/WorkspaceSubpages";
+import { BriefView, InsightsView, IntegrationView, TeamView } from "@/components/workspace/WorkspaceSubpages";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -29,6 +29,7 @@ export const Route = createFileRoute("/")({
 
 function HomeWorkspace() {
   const routerNavigate = useNavigate();
+  const location = useLocation();
   const store = useWorkspaceStore();
   const { t } = useI18n();
 
@@ -60,14 +61,19 @@ function HomeWorkspace() {
             ? t.dashboard.goodEvening
             : t.dashboard.goodNight;
     setGreeting(greetingText);
-    const params = new URLSearchParams(window.location.search);
+  }, [t.dashboard]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.searchStr || window.location.search);
     const viewParam = params.get("view") as WorkspaceView | null;
     if (viewParam) {
       setSubpage(viewParam);
+      setMyWorkOnly(false);
     } else if (params.get("myWork") === "1") {
+      setSubpage(null);
       setMyWorkOnly(true);
     }
-  }, []);
+  }, [location.searchStr]);
 
   const openProject = (project: Project) => {
     void routerNavigate({
@@ -122,10 +128,9 @@ function HomeWorkspace() {
         ) : (
           <section className="canvas">
             {subpage === "Project Brief" && <BriefView onCopy={store.copyText} />}
-            {subpage === "Sales & Billing" && <SalesView onNotice={store.setNotice} />}
             {subpage === "Manager Insights" && <InsightsView issues={defaultIssues} onOpen={() => openProject(store.projects[0]!)} />}
             {subpage === "MCP & AI Integration" && <IntegrationView onCopy={store.copyText} />}
-            {subpage === "Team & Seat-Day Billing" && <TeamView onNotice={store.setNotice} />}
+            {subpage === "Users & Members" && <TeamView onNotice={store.setNotice} />}
           </section>
         )}
       </main>

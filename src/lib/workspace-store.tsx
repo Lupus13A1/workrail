@@ -1,5 +1,14 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 
+import {
+  apiConfig,
+  authApi,
+  issuesApi,
+  onApiUnauthorized,
+  projectsApi,
+  sprintsApi,
+  type ApiMode,
+} from "@/lib/api";
 import { getBoardConfig, getNextIssueNumber, type Project, type ProjectTemplate } from "@/lib/project-dashboard";
 import {
   getProjectSampleIssues,
@@ -39,6 +48,9 @@ export const DEFAULT_AUTH_USER: AuthUser = {
 };
 
 type WorkspaceContextValue = {
+  apiMode: ApiMode;
+  isSyncing: boolean;
+  syncFromBackend: () => Promise<void>;
   user: AuthUser | null;
   isAuthenticated: boolean;
   isAuthReady: boolean;
@@ -85,6 +97,7 @@ type WorkspaceContextValue = {
 const WorkspaceContext = createContext<WorkspaceContextValue | null>(null);
 
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
+  const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
     if (typeof window === "undefined") return false;
     try {
@@ -122,6 +135,17 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       localStorage.setItem("workrail_lang", next);
     } catch {}
   };
+
+  useEffect(() => {
+    return onApiUnauthorized(() => {
+      setIsAuthenticated(false);
+      setUser(null);
+      try {
+        localStorage.removeItem("workrail_auth");
+        localStorage.removeItem("workrail_user");
+      } catch {}
+    });
+  }, []);
 
   useEffect(() => {
     try {
@@ -178,6 +202,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       localStorage.setItem("workrail_auth", "true");
       localStorage.setItem("workrail_user", JSON.stringify(newUser));
     } catch {}
+
+    if (apiConfig.isRemote) {
+      void authApi.login({ email: newUser.email }).catch(() => undefined);
+    }
   };
 
   const logout = () => {
@@ -187,6 +215,9 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       localStorage.removeItem("workrail_auth");
       localStorage.removeItem("workrail_user");
     } catch {}
+    if (apiConfig.isRemote) {
+      void authApi.logout();
+    }
   };
 
   const [projects, setProjects] = useState<Project[]>(seedProjects);
@@ -195,6 +226,27 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [recentProjectIds, setRecentProjectIds] = useState<string[]>(["app", "client", "mobile"]);
   const [darkMode, setDarkMode] = useState(false);
   const [notice, setNotice] = useState("");
+
+  const syncFromBackend = async () => {
+    if (!apiConfig.isRemote) return;
+    setIsSyncing(true);
+    try {
+      const remoteProjects = await projectsApi.list();
+      if (remoteProjects.length > 0) {
+        setProjects(remoteProjects);
+      }
+    } catch {
+      // Keep local seed fallback if remote endpoint is unreachable
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isAuthenticated && apiConfig.isRemote) {
+      void syncFromBackend();
+    }
+  }, [isAuthenticated]);
 
   const copyText = async (value: string, message = "Copied to clipboard") => {
     try {
@@ -211,6 +263,20 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
   const ensureProjectIssues = (project: Project) => {
     setProjectIssues((current) => (current[project.id] ? current : { ...current, [project.id]: getProjectSampleIssues(project) }));
+    if (apiConfig.isRemote) {
+      void issuesApi
+        .listByProject(project.id, project)
+        .then((remoteIssues) => {
+          setProjectIssues((current) => ({ ...current, [project.id]: remoteIssues }));
+        })
+        .catch(() => undefined);
+      void sprintsApi
+        .listByProject(project.id)
+        .then((remoteSprints) => {
+          setProjectSprints((current) => ({ ...current, [project.id]: remoteSprints }));
+        })
+        .catch(() => undefined);
+    }
   };
 
   const markRecent = (projectId: string) => {
@@ -222,6 +288,9 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       ...current,
       [projectId]: (current[projectId] ?? []).map((issue) => (issue.id === id ? { ...issue, ...changes } : issue)),
     }));
+    if (apiConfig.isRemote) {
+      void issuesApi.update(projectId, id, changes).catch(() => undefined);
+    }
   };
 
   const moveIssue = (
@@ -274,6 +343,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       );
     }
     if (noticeText) setNotice(noticeText);
+
+    if (apiConfig.isRemote) {
+      void issuesApi.move(projectId, draggedId, { changes, targetId, position }).catch(() => undefined);
+    }
   };
 
   const deleteIssue = (projectId: string, id: string, key: string) => {
@@ -282,6 +355,9 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       [projectId]: (current[projectId] ?? []).filter((item) => item.id !== id),
     }));
     setNotice(`Deleted ${key}`);
+    if (apiConfig.isRemote) {
+      void issuesApi.remove(projectId, id).catch(() => undefined);
+    }
   };
 
   const addIssue = (project: Project, form: FormData): Issue | null => {
@@ -336,6 +412,30 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
           : item,
       ),
     );
+
+    if (apiConfig.isRemote) {
+      void issuesApi
+        .create(
+          {
+            projectId: project.id,
+            title: issue.title,
+            status: issue.status,
+            type: issue.type,
+            priority: issue.priority,
+            assignee: issue.assignee,
+            description: issue.description,
+            sprint: issue.sprint,
+            points: issue.points,
+            parent: issue.parent,
+            env: issue.env,
+            release: issue.release,
+            tags: issue.tags,
+          },
+          currentIssues.map((i) => i.key),
+          project.key,
+        )
+        .catch(() => undefined);
+    }
     return issue;
   };
 
@@ -393,6 +493,24 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       ),
     );
     setNotice(`Created subtask ${subtask.key} under ${parentIssue.key}`);
+
+    if (apiConfig.isRemote) {
+      void issuesApi
+        .createSubtask(
+          {
+            projectId: project.id,
+            parentIssueId: parentIssue.id,
+            parentIssueKey: parentIssue.key,
+            title: subtask.title,
+            assignee: subtask.assignee,
+            priority: subtask.priority,
+            status: subtask.status,
+          },
+          currentIssues.map((i) => i.key),
+          project.key,
+        )
+        .catch(() => undefined);
+    }
     return subtask;
   };
 
@@ -414,11 +532,24 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     setProjects((current) => [project, ...current]);
     setRecentProjectIds((current) => [project.id, ...current.filter((id) => id !== project.id)].slice(0, 4));
     setNotice(`${project.name} created · ${project.template} board ready`);
+
+    if (apiConfig.isRemote) {
+      void projectsApi.create({ name, key, template }).catch(() => undefined);
+    }
     return project;
   };
 
   const toggleFavorite = (id: string) => {
-    setProjects((current) => current.map((project) => (project.id === id ? { ...project, favorite: !project.favorite } : project)));
+    setProjects((current) =>
+      current.map((project) => {
+        if (project.id !== id) return project;
+        const nextFav = !project.favorite;
+        if (apiConfig.isRemote) {
+          void projectsApi.toggleFavorite(id, nextFav).catch(() => undefined);
+        }
+        return { ...project, favorite: nextFav };
+      }),
+    );
   };
 
   const createSprint = (projectId: string, sprint: Omit<SprintItem, "id" | "status" | "code">): SprintItem => {
@@ -434,6 +565,9 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       [projectId]: [...(current[projectId] ?? []), created],
     }));
     setNotice(`${created.code} · ${created.name} created`);
+    if (apiConfig.isRemote) {
+      void sprintsApi.create(projectId, sprint, list.length).catch(() => undefined);
+    }
     return created;
   };
 
@@ -457,6 +591,9 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   return (
     <WorkspaceContext.Provider
       value={{
+        apiMode: apiConfig.mode,
+        isSyncing,
+        syncFromBackend,
         user,
         isAuthenticated,
         isAuthReady,

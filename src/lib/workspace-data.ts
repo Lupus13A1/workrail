@@ -41,10 +41,9 @@ export type WorkspaceView =
   | "Backlog & Sprints"
   | "Delivery Pipeline"
   | "Project Brief"
-  | "Sales & Billing"
   | "Manager Insights"
   | "MCP & AI Integration"
-  | "Team & Seat-Day Billing";
+  | "Users & Members";
 
 export const columns = ["To Do", "In Progress", "In Review", "Testing (UAT)", "Done"];
 
@@ -237,9 +236,9 @@ export const seedIssues: Issue[] = [
     ai: "Claude Code",
   },
   {
-    id: "billing",
+    id: "audit-log",
     key: "APP-121",
-    title: "Confirm seat-day totals against billing summary",
+    title: "Confirm role handoff rules across active sprints",
     status: "In Review",
     type: "Task",
     priority: "High",
@@ -249,8 +248,8 @@ export const seedIssues: Issue[] = [
     comments: 4,
     attachments: 1,
     votes: 8,
-    tags: ["Billing"],
-    description: "Confirm the workspace summary matches daily active seat usage.",
+    tags: ["Workflow"],
+    description: "Confirm the workspace handoff checklist matches active team roles.",
     env: "Staging / QA",
     release: "v1.4.0",
     ai: "Cursor",

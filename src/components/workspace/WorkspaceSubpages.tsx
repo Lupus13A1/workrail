@@ -23,7 +23,6 @@ import {
   Sparkles,
 } from "lucide-react";
 
-import { getBillableHumanSeats, getBillableSeatDays } from "@/lib/seat-billing";
 import { columns, people, peopleAvatars, statusClass, type Issue } from "@/lib/workspace-data";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -398,156 +397,6 @@ export function BriefView({ onCopy }: { onCopy: (text: string, message?: string)
   );
 }
 
-export function SalesView({ onNotice }: { onNotice: (message: string) => void }) {
-  const { t } = useI18n();
-  const [documentType, setDocumentType] = useState("Quotation");
-  const deals = [
-    { company: "Fern & Field Co.", project: "Storefront refresh", value: "฿480,000", paid: "2 / 3", stage: "Contract active", color: "avatar-mint", progress: 67 },
-    { company: "Morrow Studio", project: "Client portal", value: "฿265,000", paid: "1 / 3", stage: "Proposal sent", color: "avatar-coral", progress: 33 },
-    { company: "Sunday Supply", project: "Mobile app v2", value: "฿720,000", paid: "0 / 4", stage: "Draft quotation", color: "avatar-sky", progress: 8 },
-  ];
-  const docTypes = [
-    { key: "Quotation", label: t.subpages.sales.quotation },
-    { key: "Billing note", label: t.subpages.sales.billingNote },
-    { key: "Receipt", label: t.subpages.sales.receipt },
-  ];
-
-  return (
-    <div className="subpage">
-      <SectionHeading
-        eyebrow={t.subpages.sales.eyebrow}
-        title={t.subpages.sales.title}
-        description={t.subpages.sales.description}
-        action={
-          <Button size="sm" onClick={() => onNotice("New client deal started")}>
-            <Plus size={15} /> {t.subpages.sales.newDeal}
-          </Button>
-        }
-      />
-      <div className="sales-summary">
-        <div>
-          <small>{t.subpages.sales.activeContractValue}</small>
-          <strong>฿1,465,000</strong>
-          <span>
-            <ArrowUpRight size={14} /> 12% this quarter
-          </span>
-        </div>
-        <div>
-          <small>{t.subpages.sales.outstandingPayments}</small>
-          <strong>฿460,000</strong>
-          <span>Across 4 milestones</span>
-        </div>
-        <div>
-          <small>{t.subpages.sales.activeClients}</small>
-          <strong>08</strong>
-          <span>3 deals in progress</span>
-        </div>
-      </div>
-      <div className="sales-content">
-        <div className="deal-list">
-          <div className="deal-list-heading">
-            <h3>{t.subpages.sales.activeDeals}</h3>
-            <Button variant="ghost" size="sm">
-              <Filter size={14} /> {t.common.filter}
-            </Button>
-          </div>
-          {deals.map((deal) => (
-            <article className="deal-row" key={deal.company}>
-              <span className={`avatar deal-avatar ${deal.color}`}>
-                {deal.company
-                  .split(" ")
-                  .map((word) => word[0])
-                  .slice(0, 2)
-                  .join("")}
-              </span>
-              <div className="deal-main">
-                <strong>{deal.company}</strong>
-                <small>
-                  <Layers3 size={12} /> {deal.project}
-                </small>
-                <div className="deal-progress">
-                  <span style={{ width: `${deal.progress}%` }} />
-                </div>
-                <small>{deal.paid} milestones paid</small>
-              </div>
-              <div className="deal-value">
-                <strong>{deal.value}</strong>
-                <span>{deal.stage}</span>
-              </div>
-              <Button variant="ghost" size="icon" title={`Open ${deal.company}`} onClick={() => onNotice(`${deal.company} deal opened`)}>
-                <ChevronRight size={17} />
-              </Button>
-            </article>
-          ))}
-        </div>
-        <div className="document-preview">
-          <div className="preview-header">
-            <div>
-              <span className="eyebrow">{t.subpages.sales.docPreview}</span>
-              <h3>Fern & Field Co.</h3>
-            </div>
-            <Button size="icon" variant="ghost" title="More document actions" onClick={() => onNotice("Document options")}>
-              <Ellipsis size={18} />
-            </Button>
-          </div>
-          <div className="preview-options">
-            <div className="segmented">
-              {["Quotation", "Billing note", "Receipt"].map((kind) => (
-                <button key={kind} className={documentType === kind ? "segment-active" : ""} onClick={() => setDocumentType(kind)}>
-                  {kind}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="paper-preview">
-            <div className="paper-top">
-              <span className="brand-mark small-brand">
-                <Layers3 size={15} />
-              </span>
-              <span>
-                NORTHSTAR
-                <br />
-                STUDIO
-              </span>
-              <span className="paper-document-label">
-                {documentType.toUpperCase()}
-                <strong>NO. QT-2026-018</strong>
-              </span>
-            </div>
-            <hr />
-            <small>PREPARED FOR</small>
-            <h4>Fern & Field Co.</h4>
-            <p>Storefront refresh · 12 November 2026</p>
-            <div className="paper-table">
-              <span>DELIVERY MILESTONE</span>
-              <span>AMOUNT</span>
-              <p>Contract signing · 30%</p>
-              <p>฿144,000</p>
-              <p>UAT delivery · 40%</p>
-              <p>฿192,000</p>
-              <p>Production launch · 30%</p>
-              <p>฿144,000</p>
-            </div>
-            <div className="paper-total">
-              <span>TOTAL CONTRACT VALUE</span>
-              <strong>฿480,000.00</strong>
-            </div>
-            <div className="paper-foot">Northstar Studio · Bangkok, Thailand</div>
-          </div>
-          <div className="preview-actions">
-            <Button variant="outline" onClick={() => window.print()}>
-              <Download size={14} /> {t.subpages.sales.downloadPdf}
-            </Button>
-            <Button onClick={() => onNotice(`${documentType} marked as sent`)}>
-              <Send size={14} /> {t.subpages.sales.markAsSent}
-            </Button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export function InsightsView({ issues, onOpen }: { issues: Issue[]; onOpen: (id: string) => void }) {
   const { t } = useI18n();
   const done = issues.filter((issue) => issue.status === "Done").length;
@@ -817,7 +666,7 @@ const MCP_TOOLS: ToolItem[] = [
 const CORE_TOOLS_KB = 92; // Base core issues/projects tools so 92 + 112 = 204 KB full
 
 export function IntegrationView({ onCopy }: { onCopy: (text: string, message?: string) => void }) {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const [agents, setAgents] = useState<{ id: string; name: string; role: string; paused: boolean }[]>([]);
   const [tokens, setTokens] = useState<{ id: string; name: string; role: string; expiry: string; preview: string }[]>([]);
   const [tokenName, setTokenName] = useState("Claude Code");
@@ -1396,7 +1245,7 @@ export function IntegrationView({ onCopy }: { onCopy: (text: string, message?: s
 }
 
 export function TeamView({ onNotice }: { onNotice: (message: string) => void }) {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const [activePeople, setActivePeople] = useState([true, true, true, false]);
   const [memberRoles, setMemberRoles] = useState(["Project admin", "Developer", "QA", "BA"]);
   const activeCount = activePeople.filter(Boolean).length;
@@ -1442,7 +1291,7 @@ export function TeamView({ onNotice }: { onNotice: (message: string) => void }) 
           </strong>
           <p>
             <span className="free-badge">
-              <Sparkles size={12} /> {language === "th" ? "สิทธิ์เดียวกับเจ้าของ (ใช้งานฟรีเสมอ)" : "Same permissions as owner (user parity)"}
+              <Sparkles size={12} /> {language === "th" ? "สิทธิ์เดียวกับเจ้าของบัญชี" : "Same permissions as owner (user parity)"}
             </span>
           </p>
           <div className="agent-icons">
@@ -1466,7 +1315,7 @@ export function TeamView({ onNotice }: { onNotice: (message: string) => void }) 
             4 <small>{language === "th" ? "บทบาท" : "lanes"}</small>
           </strong>
           <p>Developer · QA · BA · DevOps</p>
-          <div className="seat-formula">{language === "th" ? "ใช้สำหรับกำหนดบอร์ดและการส่งมอบงาน" : "Used for board lane guidance & handoffs"}</div>
+          <div>{language === "th" ? "ใช้สำหรับกำหนดบอร์ดและการส่งมอบงาน" : "Used for board lane guidance & handoffs"}</div>
         </div>
       </div>
       <div className="member-table-wrap">

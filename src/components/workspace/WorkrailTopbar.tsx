@@ -15,7 +15,6 @@ import {
   SquareKanban,
   UserRound,
   Users,
-  WalletCards,
 } from "lucide-react";
 
 import type { Project } from "@/lib/project-dashboard";
@@ -46,7 +45,7 @@ const menuItems: { label: string; icon: ReactNode; target: WorkspaceView | "Proj
   { label: "Manager insights", icon: <Activity size={15} />, target: "Manager Insights" },
   { label: "Project docs & brief", icon: <FileCode2 size={15} />, target: "Project Brief" },
   { label: "Agent & MCP access", icon: <Bot size={15} />, target: "MCP & AI Integration" },
-  { label: "Users & members", icon: <Users size={15} />, target: "Team & Seat-Day Billing" },
+  { label: "Users & members", icon: <Users size={15} />, target: "Users & Members" },
 ];
 
 function getLocalizedMenuLabel(label: string, lang: "en" | "th"): string {
@@ -56,16 +55,16 @@ function getLocalizedMenuLabel(label: string, lang: "en" | "th"): string {
       return "โปรเจกต์";
     case "My work":
       return "งานของฉัน";
-    case "Sales & billing":
-      return "การขายและการเงิน";
     case "Manager insights":
       return "ข้อมูลเชิงลึก";
     case "Company brief":
-      return "เอกสารสรุปบริษัท";
+    case "Project docs & brief":
+      return "เอกสารและสรุปโปรเจกต์";
     case "Agent & MCP access":
       return "การเชื่อมต่อ Agent & MCP";
-    case "Team & seats":
-      return "ทีมและที่นั่ง";
+    case "Users & members":
+    case "Users & Members":
+      return "ผู้ใช้และสมาชิก";
     default:
       return label;
   }

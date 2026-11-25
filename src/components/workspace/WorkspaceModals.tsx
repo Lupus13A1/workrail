@@ -89,8 +89,9 @@ export function GlobalSearchModal({
       { title: "Backlog & Sprints", icon: <CalendarDays size={14} />, target: "Backlog & Sprints" },
       { title: "Delivery Pipeline", icon: <GitBranch size={14} />, target: "Delivery Pipeline" },
       { title: "Project Brief", icon: <FileCode2 size={14} />, target: "Project Brief" },
-      { title: "Sales & Billing", icon: <Clock3 size={14} />, target: "Sales & Billing" },
       { title: "Manager Insights", icon: <Activity size={14} />, target: "Manager Insights" },
+      { title: "Agent & MCP access", icon: <Code2 size={14} />, target: "MCP & AI Integration" },
+      { title: "Users & Members", icon: <Sparkles size={14} />, target: "Users & Members" },
     ] satisfies { title: string; icon: ReactNode; target: WorkspaceView }[]
   ).filter((page) => !normalized || page.title.toLowerCase().includes(normalized));
 
